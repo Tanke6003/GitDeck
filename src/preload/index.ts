@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AliasInfo,
+  BlameLine,
   BranchInfo,
   Commit,
   CommitDetail,
@@ -8,6 +9,7 @@ import type {
   GitResult,
   MergePreview,
   PendingOp,
+  ReflogEntry,
   RemoteInfo,
   RepoInfo,
   RepoState,
@@ -148,6 +150,14 @@ const api = {
   /** publica todos los tags que falten en el remoto */
   pushAllTags: (repo: string, remote: string): Promise<GitResult> =>
     ipcRenderer.invoke('tag:pushAll', repo, remote),
+
+  // --- blame / reflog ---
+  /** quien escribio cada linea de un archivo (opcionalmente en una revision) */
+  blame: (repo: string, path: string, rev?: string): Promise<BlameLine[]> =>
+    ipcRenderer.invoke('git:blame', repo, path, rev),
+  /** por donde paso HEAD (para recuperar commits sin rama) */
+  reflog: (repo: string, limit?: number): Promise<ReflogEntry[]> =>
+    ipcRenderer.invoke('git:reflog', repo, limit),
 
   // --- alias ---
   /** lista alias (global+local) con su desc.<name> y su marca de favorito */

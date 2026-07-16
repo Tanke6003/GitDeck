@@ -42,6 +42,7 @@ import {
   pushAllTags,
   pushTag
 } from './tagService'
+import { getBlame, getReflog } from './blameService'
 import {
   commit,
   getStagedDiff,
@@ -216,6 +217,12 @@ function registerIpc(): void {
     pushTag(repo, remote, name)
   )
   ipcMain.handle('tag:pushAll', (_e, repo: string, remote: string) => pushAllTags(repo, remote))
+
+  // -- blame / reflog --
+  ipcMain.handle('git:blame', (_e, repo: string, path: string, rev?: string) =>
+    getBlame(repo, path, rev)
+  )
+  ipcMain.handle('git:reflog', (_e, repo: string, limit?: number) => getReflog(repo, limit))
 
   // -- alias --
   ipcMain.handle('alias:list', (_e, repo: string) => getAliases(repo))

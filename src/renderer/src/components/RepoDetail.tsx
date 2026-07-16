@@ -9,6 +9,7 @@ import MergePreviewDialog from './MergePreviewDialog'
 import StashPanel from './StashPanel'
 import TagPanel from './TagPanel'
 import SearchBar from './SearchBar'
+import ReflogDialog from './ReflogDialog'
 
 interface Props {
   repo: RepoInfo
@@ -27,6 +28,7 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
   // resultados de busqueda; null = sin busqueda activa (se muestra el grafo)
   const [search, setSearch] = useState<Commit[] | null>(null)
+  const [showReflog, setShowReflog] = useState(false)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null) // etiqueta de accion en curso
   const [result, setResult] = useState<GitResult | null>(null)
@@ -403,6 +405,13 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
               <button onClick={() => setShowNewBranch((s) => !s)} disabled={!!busy}>
                 ＋ Nueva rama
               </button>
+              <button
+                onClick={() => setShowReflog(true)}
+                disabled={!!busy}
+                title="git reflog: recuperar commits que quedaron sin rama"
+              >
+                ⏱ Reflog
+              </button>
             </>
           )}
           <button onClick={reloadAll} disabled={!!busy} title="Recargar">
@@ -752,6 +761,14 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
           busy={busy === 'merge'}
           onConfirm={doMerge}
           onCancel={closeMerge}
+        />
+      )}
+
+      {showReflog && (
+        <ReflogDialog
+          repoPath={repo.path}
+          onChanged={reloadAll}
+          onClose={() => setShowReflog(false)}
         />
       )}
 

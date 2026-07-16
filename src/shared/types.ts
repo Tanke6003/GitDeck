@@ -145,6 +145,35 @@ export interface AliasInfo {
   favorite: boolean
 }
 
+/** Una linea de `git blame`: el commit que la introdujo + su contenido. */
+export interface BlameLine {
+  hash: string
+  short: string
+  author: string
+  /** fecha del commit (epoch en segundos) */
+  timestamp: number
+  /** asunto del commit, para el tooltip */
+  subject: string
+  /** numero de linea en el archivo */
+  line: number
+  /** texto de la linea */
+  content: string
+}
+
+/** Una entrada del reflog: por donde paso HEAD. */
+export interface ReflogEntry {
+  /** selector usable como revision: "HEAD@{2}" */
+  ref: string
+  /** sha corto al que apuntaba */
+  short: string
+  /** que se hizo: "commit: …", "reset: moving to …", "checkout: …" */
+  action: string
+  /** cuando, relativo */
+  date: string
+  /** asunto del commit apuntado */
+  subject: string
+}
+
 /**
  * Como se busca un commit:
  * - `message`  texto en el mensaje (--grep)

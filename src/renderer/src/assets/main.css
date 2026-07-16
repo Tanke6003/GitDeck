@@ -1714,6 +1714,166 @@ button.link:hover:not(:disabled) {
   color: var(--danger);
 }
 
+/* ---- blame / reflog (diálogo ancho centrado) ---- */
+.bl-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 92vw);
+  max-height: 86vh;
+  margin: 7vh auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bl-path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bl-rev {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.bl-empty {
+  padding: 24px 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.bl-body {
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.bl-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.bl-row:hover {
+  background: var(--bg-elev);
+}
+/* datos del commit: solo se pintan en la primera línea de cada bloque */
+.bl-gutter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 0 0 300px;
+  padding: 0 8px;
+  border-left: 3px solid transparent;
+  font-size: 10px;
+  color: var(--text-dim);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.bl-row.first .bl-gutter {
+  padding-top: 2px;
+}
+.bl-sha {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.bl-author {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bl-date {
+  flex: 0 0 auto;
+}
+.bl-num {
+  flex: 0 0 46px;
+  text-align: right;
+  padding-right: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  user-select: none;
+}
+.bl-code {
+  flex: 1;
+  margin: 0;
+  padding: 1px 8px 1px 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* reflog */
+.rl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+.rl-row {
+  border-bottom: 1px solid var(--border);
+}
+.rl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 12px;
+}
+.rl-row:hover {
+  background: var(--bg-elev);
+}
+.rl-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  flex: 0 0 82px;
+}
+.rl-sha {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.rl-kind {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+.rl-subject {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rl-date {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+.rl-branch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 10px 92px;
+  flex-wrap: wrap;
+}
+.rl-branch input {
+  background: #11111b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.rl-branch input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* ---- resultado de cherry-pick / revert (drawer) ---- */
 .cd-opres {
   display: flex;

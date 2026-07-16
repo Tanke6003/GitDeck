@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { CommitDetail, GitResult } from '@shared/types'
 import { ansiToHtml } from '../lib/ansi'
 import ConfirmDialog, { type ConfirmSpec } from './ConfirmDialog'
+import BlameDialog from './BlameDialog'
 
 interface Props {
   repoPath: string
@@ -44,6 +45,8 @@ function CommitDetailDrawer({
   const [branchRes, setBranchRes] = useState<GitResult | null>(null)
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
   const [opRes, setOpRes] = useState<GitResult | null>(null)
+  // archivo cuyo blame se esta viendo, o null
+  const [blameFile, setBlameFile] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -222,6 +225,16 @@ function CommitDetailDrawer({
                 <li key={f.path} className="cd-file">
                   <span className={`cd-fstat ${statusClass(f.status)}`}>{f.status}</span>
                   <span className="cd-fpath">{f.path}</span>
+                  {/* un archivo borrado en este commit no existe aqui: no hay blame */}
+                  {f.status !== 'D' && (
+                    <button
+                      className="link"
+                      onClick={() => setBlameFile(f.path)}
+                      title={`ver quién escribió cada línea de ${f.path} en este commit`}
+                    >
+                      blame
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -230,6 +243,15 @@ function CommitDetailDrawer({
           </div>
         )}
       </div>
+
+      {blameFile && (
+        <BlameDialog
+          repoPath={repoPath}
+          path={blameFile}
+          rev={hash}
+          onClose={() => setBlameFile(null)}
+        />
+      )}
 
       {confirm && <ConfirmDialog {...confirm} onCancel={() => setConfirm(null)} />}
     </div>
