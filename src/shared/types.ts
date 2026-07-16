@@ -141,6 +141,33 @@ export interface AliasInfo {
   favorite: boolean
 }
 
+/** Un tag, ligero o anotado. */
+export interface TagInfo {
+  name: string
+  /** sha corto del COMMIT apuntado (en un anotado, no el del objeto tag) */
+  commit: string
+  /** true si es un tag anotado (objeto propio con autor y mensaje) */
+  annotated: boolean
+  /** mensaje del tag; vacio en los ligeros (no tienen) */
+  message: string
+  /** fecha de creacion, relativa */
+  date: string
+}
+
+/** Una entrada de la pila de stash (git stash list). */
+export interface StashEntry {
+  /** posicion en la pila: 0 = el mas reciente */
+  index: number
+  /** ref usable en comandos: "stash@{0}" */
+  ref: string
+  /** mensaje, ya sin el prefijo "WIP on <rama>: <sha>" */
+  message: string
+  /** rama en la que se creo el stash */
+  branch: string
+  /** cuando se creo, relativo (ej. "2 hours ago") */
+  date: string
+}
+
 /** Un commit que entraria con un merge (linea del log HEAD..branch). */
 export interface IncomingCommit {
   short: string

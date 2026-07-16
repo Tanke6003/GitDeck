@@ -25,6 +25,23 @@ import {
 import { deleteAlias, getAliases, runAlias, setAlias, stopAlias } from './aliasService'
 import { toggleFavorite } from './aliasStore'
 import {
+  applyStash,
+  branchFromStash,
+  dropStash,
+  listStashes,
+  popStash,
+  pushStash,
+  showStash
+} from './stashService'
+import {
+  createTag,
+  deleteRemoteTag,
+  deleteTag,
+  listTags,
+  pushAllTags,
+  pushTag
+} from './tagService'
+import {
   commit,
   getStagedDiff,
   getStatus,
@@ -162,6 +179,37 @@ function registerIpc(): void {
   ipcMain.handle('git:mergePreview', (_e, repo: string, branch: string) =>
     getMergePreview(repo, branch)
   )
+
+  // -- stash --
+  ipcMain.handle('stash:list', (_e, repo: string) => listStashes(repo))
+  ipcMain.handle(
+    'stash:push',
+    (_e, repo: string, message?: string, includeUntracked?: boolean, keepIndex?: boolean) =>
+      pushStash(repo, message, includeUntracked, keepIndex)
+  )
+  ipcMain.handle('stash:apply', (_e, repo: string, ref: string) => applyStash(repo, ref))
+  ipcMain.handle('stash:pop', (_e, repo: string, ref: string) => popStash(repo, ref))
+  ipcMain.handle('stash:drop', (_e, repo: string, ref: string) => dropStash(repo, ref))
+  ipcMain.handle('stash:branch', (_e, repo: string, name: string, ref: string) =>
+    branchFromStash(repo, name, ref)
+  )
+  ipcMain.handle('stash:show', (_e, repo: string, ref: string) => showStash(repo, ref))
+
+  // -- tags --
+  ipcMain.handle('tag:list', (_e, repo: string) => listTags(repo))
+  ipcMain.handle(
+    'tag:create',
+    (_e, repo: string, name: string, message?: string, target?: string) =>
+      createTag(repo, name, message, target)
+  )
+  ipcMain.handle('tag:delete', (_e, repo: string, name: string) => deleteTag(repo, name))
+  ipcMain.handle('tag:deleteRemote', (_e, repo: string, remote: string, name: string) =>
+    deleteRemoteTag(repo, remote, name)
+  )
+  ipcMain.handle('tag:push', (_e, repo: string, remote: string, name: string) =>
+    pushTag(repo, remote, name)
+  )
+  ipcMain.handle('tag:pushAll', (_e, repo: string, remote: string) => pushAllTags(repo, remote))
 
   // -- alias --
   ipcMain.handle('alias:list', (_e, repo: string) => getAliases(repo))

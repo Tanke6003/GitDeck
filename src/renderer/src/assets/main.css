@@ -609,6 +609,124 @@ button.link:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* checkbox dentro de los forms del panel lateral */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.check input {
+  accent-color: var(--accent);
+}
+
+/* ---- stashes ---- */
+.stash-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.stash-row {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.stash-row:hover {
+  background: var(--bg-elev);
+}
+.st-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.st-msg {
+  font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.st-msg:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.st-actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.st-actions button {
+  font-size: 10px;
+  padding: 1px 5px;
+}
+.st-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+/* ---- tags ---- */
+.tag-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.tag-row {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.tag-row:hover {
+  background: var(--bg-elev);
+}
+.tg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.tg-name {
+  font-size: 13px;
+  /* mismo amarillo que los chips de tag del grafo */
+  color: var(--warn);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tg-actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.tg-actions button {
+  font-size: 10px;
+  padding: 1px 5px;
+}
+.tg-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* el diff puede ser ancho: que scrollee el bloque, no el panel */
+.st-diff {
+  margin: 6px 0 2px;
+  padding: 8px;
+  max-height: 260px;
+  overflow: auto;
+  background: #11111b;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 /* ---- drawer de detalle de commit ---- */
 .cd-overlay {
   position: fixed;

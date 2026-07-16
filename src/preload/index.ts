@@ -9,7 +9,9 @@ import type {
   MergePreview,
   RemoteInfo,
   RepoInfo,
-  RepoState
+  RepoState,
+  StashEntry,
+  TagInfo
 } from '@shared/types'
 
 /**
@@ -91,6 +93,52 @@ const api = {
   /** que traeria fusionar `branch` en HEAD (solo lecturas) */
   mergePreview: (repo: string, branch: string): Promise<MergePreview> =>
     ipcRenderer.invoke('git:mergePreview', repo, branch),
+
+  // --- stash ---
+  /** pila de stashes (0 = mas reciente) */
+  stashes: (repo: string): Promise<StashEntry[]> => ipcRenderer.invoke('stash:list', repo),
+  /** guarda los cambios actuales en un stash */
+  stashPush: (
+    repo: string,
+    message?: string,
+    includeUntracked?: boolean,
+    keepIndex?: boolean
+  ): Promise<GitResult> =>
+    ipcRenderer.invoke('stash:push', repo, message, includeUntracked, keepIndex),
+  /** aplica un stash y lo deja en la pila */
+  stashApply: (repo: string, ref: string): Promise<GitResult> =>
+    ipcRenderer.invoke('stash:apply', repo, ref),
+  /** aplica un stash y lo saca de la pila */
+  stashPop: (repo: string, ref: string): Promise<GitResult> =>
+    ipcRenderer.invoke('stash:pop', repo, ref),
+  /** descarta un stash sin aplicarlo */
+  stashDrop: (repo: string, ref: string): Promise<GitResult> =>
+    ipcRenderer.invoke('stash:drop', repo, ref),
+  /** crea una rama a partir de un stash */
+  stashBranch: (repo: string, name: string, ref: string): Promise<GitResult> =>
+    ipcRenderer.invoke('stash:branch', repo, name, ref),
+  /** diff de lo que guarda un stash (con color) */
+  stashShow: (repo: string, ref: string): Promise<GitResult> =>
+    ipcRenderer.invoke('stash:show', repo, ref),
+
+  // --- tags ---
+  /** tags del repo, los mas nuevos primero */
+  tags: (repo: string): Promise<TagInfo[]> => ipcRenderer.invoke('tag:list', repo),
+  /** crea un tag; con message es anotado, sin el es ligero */
+  createTag: (repo: string, name: string, message?: string, target?: string): Promise<GitResult> =>
+    ipcRenderer.invoke('tag:create', repo, name, message, target),
+  /** borra un tag local */
+  deleteTag: (repo: string, name: string): Promise<GitResult> =>
+    ipcRenderer.invoke('tag:delete', repo, name),
+  /** borra un tag en el remoto */
+  deleteRemoteTag: (repo: string, remote: string, name: string): Promise<GitResult> =>
+    ipcRenderer.invoke('tag:deleteRemote', repo, remote, name),
+  /** publica un tag en el remoto */
+  pushTag: (repo: string, remote: string, name: string): Promise<GitResult> =>
+    ipcRenderer.invoke('tag:push', repo, remote, name),
+  /** publica todos los tags que falten en el remoto */
+  pushAllTags: (repo: string, remote: string): Promise<GitResult> =>
+    ipcRenderer.invoke('tag:pushAll', repo, remote),
 
   // --- alias ---
   /** lista alias (global+local) con su desc.<name> y su marca de favorito */

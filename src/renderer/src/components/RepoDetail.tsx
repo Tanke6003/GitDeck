@@ -6,6 +6,8 @@ import CommitPanel from './CommitPanel'
 import CommitDetailDrawer from './CommitDetailDrawer'
 import ConfirmDialog, { type ConfirmSpec } from './ConfirmDialog'
 import MergePreviewDialog from './MergePreviewDialog'
+import StashPanel from './StashPanel'
+import TagPanel from './TagPanel'
 
 interface Props {
   repo: RepoInfo
@@ -686,6 +688,20 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
                 </li>
               ))}
             </ul>
+
+            <StashPanel
+              repoPath={repo.path}
+              dirty={repo.dirty}
+              onChanged={reloadAll}
+              onResult={setResult}
+            />
+
+            <TagPanel
+              repoPath={repo.path}
+              remotes={remotes.map((r) => r.name)}
+              onChanged={reloadAll}
+              onResult={setResult}
+            />
           </aside>
         </div>
       )}
