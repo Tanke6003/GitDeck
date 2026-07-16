@@ -117,12 +117,16 @@ export interface FileStatus {
   conflicted: boolean
 }
 
+/**
+ * Operacion a medias que hay que terminar (--continue) o abortar (--abort).
+ * Cada una deja su propia marca en el git dir, asi que solo puede haber una.
+ */
+export type PendingOp = 'merge' | 'rebase' | 'cherry-pick' | 'revert'
+
 /** Estado global del repo respecto a operaciones en curso. */
 export interface RepoState {
-  /** hay un merge sin terminar (existe MERGE_HEAD) */
-  merging: boolean
-  /** hay un rebase en curso */
-  rebasing: boolean
+  /** operacion sin terminar, o null si el repo esta tranquilo */
+  op: PendingOp | null
   /** rutas de archivos en conflicto (unmerged) */
   conflicted: string[]
 }

@@ -7,6 +7,7 @@ import type {
   FileStatus,
   GitResult,
   MergePreview,
+  PendingOp,
   RemoteInfo,
   RepoInfo,
   RepoState,
@@ -173,19 +174,25 @@ const api = {
   commit: (repo: string, message: string, amend?: boolean): Promise<GitResult> =>
     ipcRenderer.invoke('commit:commit', repo, message, amend),
 
-  // --- merge / rebase ---
-  /** estado del repo: merge/rebase en curso + archivos en conflicto */
+  // --- merge / rebase / cherry-pick / revert ---
+  /** operacion a medias (si la hay) + archivos en conflicto */
   repoState: (repo: string): Promise<RepoState> => ipcRenderer.invoke('git:state', repo),
   merge: (repo: string, branch: string): Promise<GitResult> =>
     ipcRenderer.invoke('git:merge', repo, branch),
   rebase: (repo: string, onto: string): Promise<GitResult> =>
     ipcRenderer.invoke('git:rebase', repo, onto),
-  mergeAbort: (repo: string): Promise<GitResult> => ipcRenderer.invoke('git:mergeAbort', repo),
-  rebaseAbort: (repo: string): Promise<GitResult> => ipcRenderer.invoke('git:rebaseAbort', repo),
-  mergeContinue: (repo: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:mergeContinue', repo),
-  rebaseContinue: (repo: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:rebaseContinue', repo),
+  /** aplica un commit de otra rama sobre la actual (cherry-pick -x) */
+  cherryPick: (repo: string, hash: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:cherryPick', repo, hash),
+  /** crea un commit que deshace otro */
+  revert: (repo: string, hash: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:revert', repo, hash),
+  /** termina la operacion en curso tras resolver conflictos */
+  continueOp: (repo: string, op: PendingOp): Promise<GitResult> =>
+    ipcRenderer.invoke('git:continueOp', repo, op),
+  /** aborta la operacion en curso */
+  abortOp: (repo: string, op: PendingOp): Promise<GitResult> =>
+    ipcRenderer.invoke('git:abortOp', repo, op),
 
   // --- dialogos / sistema ---
   /** abre el selector nativo de carpeta; null si se cancela */

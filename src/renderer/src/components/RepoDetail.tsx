@@ -724,6 +724,7 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
           hash={selectedCommit}
           dirty={repo.dirty}
           onBranchCreated={reloadAll}
+          onApplied={reloadAll}
           onClose={() => setSelectedCommit(null)}
         />
       )}

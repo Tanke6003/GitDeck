@@ -1616,6 +1616,32 @@ button.link:hover:not(:disabled) {
   color: var(--danger);
 }
 
+/* ---- resultado de cherry-pick / revert (drawer) ---- */
+.cd-opres {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--ok);
+  background: var(--bg-elev);
+}
+.cd-opres.err {
+  border-left-color: var(--danger);
+}
+.cd-opres .cd-cmd {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cd-opres pre {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
 /* ---- crear rama desde un commit (drawer) ---- */
 .cd-branch {
   display: flex;

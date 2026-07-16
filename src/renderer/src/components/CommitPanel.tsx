@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FileStatus, GitResult, RepoState } from '@shared/types'
+import type { FileStatus, GitResult, PendingOp, RepoState } from '@shared/types'
 import { ansiToHtml } from '../lib/ansi'
+
+/** Como se llama cada operacion a medias en el banner. */
+const OP_LABEL: Record<PendingOp, string> = {
+  merge: 'Merge',
+  rebase: 'Rebase',
+  'cherry-pick': 'Cherry-pick',
+  revert: 'Revert'
+}
 
 /** Tipos Conventional Commits. */
 const TYPES = [
@@ -115,20 +123,18 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
     [repoPath]
   )
   const onContinue = useCallback(async () => {
+    if (!state?.op) return
     setBusy(true)
-    const res = state?.merging
-      ? await window.api.mergeContinue(repoPath)
-      : await window.api.rebaseContinue(repoPath)
+    const res = await window.api.continueOp(repoPath, state.op)
     setResult(res)
     setBusy(false)
     await refresh()
     onCommitted()
   }, [state, repoPath, refresh, onCommitted])
   const onAbort = useCallback(async () => {
+    if (!state?.op) return
     setBusy(true)
-    const res = state?.merging
-      ? await window.api.mergeAbort(repoPath)
-      : await window.api.rebaseAbort(repoPath)
+    const res = await window.api.abortOp(repoPath, state.op)
     setResult(res)
     setBusy(false)
     await refresh()
@@ -194,9 +200,9 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
 
   return (
     <div className="commit-panel">
-      {(state?.merging || state?.rebasing) && (
+      {state?.op && (
         <div className="merge-banner">
-          <span className="mb-label">⚠ {state.merging ? 'Merge' : 'Rebase'} en curso</span>
+          <span className="mb-label">⚠ {OP_LABEL[state.op]} en curso</span>
           <span className="mb-info">
             {state.conflicted.length > 0
               ? `${state.conflicted.length} conflicto(s): resuélvelos, marca ✓, y Continuar`

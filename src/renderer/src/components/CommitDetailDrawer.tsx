@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { CommitDetail, GitResult } from '@shared/types'
 import { ansiToHtml } from '../lib/ansi'
+import ConfirmDialog, { type ConfirmSpec } from './ConfirmDialog'
 
 interface Props {
   repoPath: string
@@ -9,6 +10,8 @@ interface Props {
   dirty: boolean
   /** avisar al padre para refrescar grafo/ramas tras crear una rama */
   onBranchCreated: () => void
+  /** avisar al padre tras cherry-pick/revert (cambian HEAD y el working tree) */
+  onApplied: () => void
   onClose: () => void
 }
 
@@ -30,6 +33,7 @@ function CommitDetailDrawer({
   hash,
   dirty,
   onBranchCreated,
+  onApplied,
   onClose
 }: Props): JSX.Element {
   const [detail, setDetail] = useState<CommitDetail | null>(null)
@@ -38,6 +42,8 @@ function CommitDetailDrawer({
   const [checkout, setCheckout] = useState(true)
   const [busy, setBusy] = useState(false)
   const [branchRes, setBranchRes] = useState<GitResult | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
+  const [opRes, setOpRes] = useState<GitResult | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -45,6 +51,7 @@ function CommitDetailDrawer({
     setShowBranch(false)
     setBranchName('')
     setBranchRes(null)
+    setOpRes(null)
     window.api.commitDetail(repoPath, hash).then((d) => {
       if (alive) setDetail(d)
     })
@@ -68,6 +75,49 @@ function CommitDetailDrawer({
     }
   }, [branchName, repoPath, hash, checkout, onBranchCreated])
 
+  /**
+   * Cherry-pick / revert. Los dos crean un commit sobre la rama ACTUAL y pueden
+   * dejar conflictos; si eso pasa, el banner de la pestaña Commit toma el relevo
+   * (Continuar / Abortar), asi que ahi mandamos al usuario.
+   */
+  const runOn = useCallback(
+    (label: 'cherry-pick' | 'revert', fn: () => Promise<GitResult>, warn: ReactNode) => {
+      setConfirm({
+        title: label === 'revert' ? 'Revertir commit' : 'Aplicar commit aquí (cherry-pick)',
+        message: warn,
+        confirmLabel: label === 'revert' ? 'Revertir' : 'Aplicar',
+        onConfirm: async () => {
+          setConfirm(null)
+          setBusy(true)
+          const res = await fn()
+          setOpRes(res)
+          setBusy(false)
+          onApplied()
+        }
+      })
+    },
+    [onApplied]
+  )
+
+  const onCherryPick = useCallback(() => {
+    runOn('cherry-pick', () => window.api.cherryPick(repoPath, hash), (
+      <>
+        Se aplicará <b>{detail?.short || hash.slice(0, 7)}</b> sobre la rama actual, creando un
+        commit nuevo. Si choca con lo que ya hay, quedarán conflictos que resolver en la pestaña
+        Commit.
+      </>
+    ))
+  }, [runOn, repoPath, hash, detail])
+
+  const onRevert = useCallback(() => {
+    runOn('revert', () => window.api.revert(repoPath, hash), (
+      <>
+        Se creará un commit que deshace <b>{detail?.short || hash.slice(0, 7)}</b> en la rama
+        actual. No borra el commit original: lo contrarresta.
+      </>
+    ))
+  }, [runOn, repoPath, hash, detail])
+
   return (
     <div className="cd-overlay" onClick={onClose}>
       <div className="cd-drawer" onClick={(e) => e.stopPropagation()}>
@@ -82,10 +132,39 @@ function CommitDetailDrawer({
           >
             ⑂ rama aquí
           </button>
+          <button
+            className="link"
+            onClick={onCherryPick}
+            disabled={busy}
+            title="aplicar este commit sobre la rama actual (cherry-pick)"
+          >
+            ⇢ cherry-pick
+          </button>
+          <button
+            className="link"
+            onClick={onRevert}
+            disabled={busy}
+            title="crear un commit que deshaga este"
+          >
+            ↩ revert
+          </button>
           <button className="link" onClick={onClose} title="cerrar">
             ✕
           </button>
         </div>
+
+        {opRes && (
+          <div className={`cd-opres ${opRes.ok ? 'ok' : 'err'}`}>
+            <span className="cd-cmd">$ {opRes.cmd}</span>
+            <pre>{(opRes.stdout || opRes.stderr || '(sin salida)').trim()}</pre>
+            {!opRes.ok && (
+              <span className="hint">
+                Si quedaron conflictos, resuélvelos en la pestaña <b>Commit</b> y usa Continuar o
+                Abortar.
+              </span>
+            )}
+          </div>
+        )}
 
         {showBranch && (
           <div className="cd-branch">
@@ -151,6 +230,8 @@ function CommitDetailDrawer({
           </div>
         )}
       </div>
+
+      {confirm && <ConfirmDialog {...confirm} onCancel={() => setConfirm(null)} />}
     </div>
   )
 }

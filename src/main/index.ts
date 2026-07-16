@@ -51,15 +51,15 @@ import {
   unstageFile
 } from './commitService'
 import {
+  abortOp,
+  cherryPick,
+  continueOp,
   getRepoState,
   merge,
-  mergeAbort,
-  mergeContinue,
   rebase,
-  rebaseAbort,
-  rebaseContinue
+  revert
 } from './mergeService'
-import type { RepoInfo } from '@shared/types'
+import type { PendingOp, RepoInfo } from '@shared/types'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -234,14 +234,14 @@ function registerIpc(): void {
     commit(repo, message, amend)
   )
 
-  // -- merge / rebase --
+  // -- merge / rebase / cherry-pick / revert --
   ipcMain.handle('git:state', (_e, repo: string) => getRepoState(repo))
   ipcMain.handle('git:merge', (_e, repo: string, branch: string) => merge(repo, branch))
   ipcMain.handle('git:rebase', (_e, repo: string, onto: string) => rebase(repo, onto))
-  ipcMain.handle('git:mergeAbort', (_e, repo: string) => mergeAbort(repo))
-  ipcMain.handle('git:rebaseAbort', (_e, repo: string) => rebaseAbort(repo))
-  ipcMain.handle('git:mergeContinue', (_e, repo: string) => mergeContinue(repo))
-  ipcMain.handle('git:rebaseContinue', (_e, repo: string) => rebaseContinue(repo))
+  ipcMain.handle('git:cherryPick', (_e, repo: string, hash: string) => cherryPick(repo, hash))
+  ipcMain.handle('git:revert', (_e, repo: string, hash: string) => revert(repo, hash))
+  ipcMain.handle('git:continueOp', (_e, repo: string, op: PendingOp) => continueOp(repo, op))
+  ipcMain.handle('git:abortOp', (_e, repo: string, op: PendingOp) => abortOp(repo, op))
 
   // -- abrir archivo en el editor/app por defecto del sistema --
   ipcMain.handle('shell:openFile', async (_e, repo: string, relPath: string): Promise<string> => {
