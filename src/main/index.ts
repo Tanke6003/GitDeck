@@ -20,7 +20,8 @@ import {
   push,
   removeRemote,
   renameBranch,
-  renameRemote
+  renameRemote,
+  searchCommits
 } from './gitService'
 import { deleteAlias, getAliases, runAlias, setAlias, stopAlias } from './aliasService'
 import { toggleFavorite } from './aliasStore'
@@ -59,7 +60,7 @@ import {
   rebase,
   revert
 } from './mergeService'
-import type { PendingOp, RepoInfo } from '@shared/types'
+import type { PendingOp, RepoInfo, SearchMode } from '@shared/types'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -139,6 +140,11 @@ function registerIpc(): void {
   ipcMain.handle('git:commits', (_e, repo: string, limit?: number) => getCommits(repo, limit))
   ipcMain.handle('git:commitDetail', (_e, repo: string, hash: string) =>
     getCommitDetail(repo, hash)
+  )
+  ipcMain.handle(
+    'git:search',
+    (_e, repo: string, mode: SearchMode, text: string, limit?: number) =>
+      searchCommits(repo, mode, text, limit)
   )
   ipcMain.handle('git:branches', (_e, repo: string) => getBranches(repo))
   ipcMain.handle('git:remotes', (_e, repo: string) => getRemotes(repo))

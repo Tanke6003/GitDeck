@@ -145,6 +145,16 @@ export interface AliasInfo {
   favorite: boolean
 }
 
+/**
+ * Como se busca un commit:
+ * - `message`  texto en el mensaje (--grep)
+ * - `author`   nombre/email del autor (--author)
+ * - `content`  texto que el commit agrego o quito (pickaxe -S)
+ * - `file`     commits que tocaron rutas que contienen el texto
+ * - `hash`     una revision concreta (sha, rama, tag, HEAD~2…)
+ */
+export type SearchMode = 'message' | 'author' | 'content' | 'file' | 'hash'
+
 /** Un tag, ligero o anotado. */
 export interface TagInfo {
   name: string

@@ -6,21 +6,19 @@ import type {
   GitResult,
   IncomingCommit,
   MergePreview,
-  RemoteInfo
+  RemoteInfo,
+  SearchMode
 } from '@shared/types'
 
 /** separador de campos poco probable en el contenido (unit separator) */
 const SEP = '\x1f'
 
-/** Lee el log de TODAS las ramas (para el grafo). Newest-first, --date-order. */
-export async function getCommits(repo: string, limit = 400): Promise<Commit[]> {
-  const fmt = ['%H', '%h', '%P', '%an', '%ae', '%at', '%D', '%s'].join(SEP)
-  const res = await runGit(
-    ['log', '--all', '--date-order', `--max-count=${limit}`, `--pretty=format:${fmt}`],
-    repo
-  )
-  if (!res.ok) return []
-  return res.stdout
+/** formato de una linea de log -> Commit */
+const LOG_FMT = ['%H', '%h', '%P', '%an', '%ae', '%at', '%D', '%s'].join(SEP)
+
+/** Parsea la salida de `log --pretty=format:LOG_FMT`. */
+function parseCommits(stdout: string): Commit[] {
+  return stdout
     .split('\n')
     .filter((l) => l.length > 0)
     .map((line) => {
@@ -41,6 +39,58 @@ export async function getCommits(repo: string, limit = 400): Promise<Commit[]> {
         subject: subject ?? ''
       }
     })
+}
+
+/** Lee el log de TODAS las ramas (para el grafo). Newest-first, --date-order. */
+export async function getCommits(repo: string, limit = 400): Promise<Commit[]> {
+  const res = await runGit(
+    ['log', '--all', '--date-order', `--max-count=${limit}`, `--pretty=format:${LOG_FMT}`],
+    repo
+  )
+  return res.ok ? parseCommits(res.stdout) : []
+}
+
+/**
+ * Busca commits en todas las ramas.
+ *
+ * Los argumentos van como array a execFile (sin shell), asi que el texto del
+ * usuario no se interpreta: no hace falta escaparlo.
+ */
+export async function searchCommits(
+  repo: string,
+  mode: SearchMode,
+  text: string,
+  limit = 200
+): Promise<Commit[]> {
+  const t = text.trim()
+  if (!t) return []
+
+  const base = ['log', `--max-count=${limit}`, `--pretty=format:${LOG_FMT}`]
+  let args: string[]
+  switch (mode) {
+    case 'message':
+      args = [...base, '--all', '--regexp-ignore-case', `--grep=${t}`]
+      break
+    case 'author':
+      args = [...base, '--all', '--regexp-ignore-case', `--author=${t}`]
+      break
+    case 'content':
+      // pickaxe: commits donde cambio el numero de apariciones del texto
+      args = [...base, '--all', `-S${t}`]
+      break
+    case 'file':
+      // pathspec con comodines: cualquier ruta que contenga el texto
+      args = [...base, '--all', '--', `*${t}*`]
+      break
+    case 'hash':
+      // acepta cualquier revision: sha, rama, tag, HEAD~2...
+      args = [...base, '--max-count=1', t]
+      break
+  }
+
+  const res = await runGit(args, repo)
+  // una revision inexistente o un regex invalido salen por exit != 0: sin resultados
+  return res.ok ? parseCommits(res.stdout) : []
 }
 
 /** Detalle de un commit: metadatos, archivos cambiados y diff con color. */

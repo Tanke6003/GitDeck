@@ -620,6 +620,104 @@ button.link:hover:not(:disabled) {
   accent-color: var(--accent);
 }
 
+/* ---- buscador de commits ---- */
+.search-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.s-icon {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+.s-input {
+  flex: 1;
+  min-width: 140px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+.s-input:focus {
+  outline: none;
+}
+.s-modes {
+  display: flex;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.s-modes button {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.s-modes button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(137, 180, 250, 0.12);
+}
+.s-results {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.s-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.s-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  min-height: 0;
+}
+.s-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.s-row:hover {
+  background: var(--bg-elev);
+}
+.s-sha {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.s-subject {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s-author {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
 /* ---- stashes ---- */
 .stash-list {
   list-style: none;

@@ -11,6 +11,7 @@ import type {
   RemoteInfo,
   RepoInfo,
   RepoState,
+  SearchMode,
   StashEntry,
   TagInfo
 } from '@shared/types'
@@ -44,6 +45,13 @@ const api = {
   /** detalle de un commit (meta + archivos + diff) */
   commitDetail: (repo: string, hash: string): Promise<CommitDetail> =>
     ipcRenderer.invoke('git:commitDetail', repo, hash),
+  /** busca commits por mensaje, autor, contenido, archivo o revision */
+  searchCommits: (
+    repo: string,
+    mode: SearchMode,
+    text: string,
+    limit?: number
+  ): Promise<Commit[]> => ipcRenderer.invoke('git:search', repo, mode, text, limit),
   /** ramas locales y remotas */
   branches: (repo: string): Promise<BranchInfo[]> => ipcRenderer.invoke('git:branches', repo),
   /** remotos con sus URLs */

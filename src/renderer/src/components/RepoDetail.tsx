@@ -8,6 +8,7 @@ import ConfirmDialog, { type ConfirmSpec } from './ConfirmDialog'
 import MergePreviewDialog from './MergePreviewDialog'
 import StashPanel from './StashPanel'
 import TagPanel from './TagPanel'
+import SearchBar from './SearchBar'
 
 interface Props {
   repo: RepoInfo
@@ -24,6 +25,8 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
   const [branches, setBranches] = useState<BranchInfo[]>([])
   const [remotes, setRemotes] = useState<RemoteInfo[]>([])
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
+  // resultados de busqueda; null = sin busqueda activa (se muestra el grafo)
+  const [search, setSearch] = useState<Commit[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null) // etiqueta de accion en curso
   const [result, setResult] = useState<GitResult | null>(null)
@@ -63,6 +66,7 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
   useEffect(() => {
     setResult(null)
     setSelectedCommit(null)
+    setSearch(null)
     load()
   }, [load])
 
@@ -452,17 +456,29 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
       ) : (
         <div className="detail-body">
           <section className="graph-pane">
-            <div className="pane-title">
-              Árbol de commits {loading && <span className="mini">cargando…</span>}
-              <span className="mini">{commits.length} commits (todas las ramas)</span>
-            </div>
-            <div className="graph-scroll">
-              <CommitGraph
-                commits={commits}
-                selected={selectedCommit}
-                onSelect={setSelectedCommit}
-              />
-            </div>
+            {/* key: al cambiar de repo se remonta y limpia texto y resultados */}
+            <SearchBar
+              key={repo.path}
+              repoPath={repo.path}
+              results={search}
+              onResults={setSearch}
+              onPick={setSelectedCommit}
+            />
+            {!search && (
+              <>
+                <div className="pane-title">
+                  Árbol de commits {loading && <span className="mini">cargando…</span>}
+                  <span className="mini">{commits.length} commits (todas las ramas)</span>
+                </div>
+                <div className="graph-scroll">
+                  <CommitGraph
+                    commits={commits}
+                    selected={selectedCommit}
+                    onSelect={setSelectedCommit}
+                  />
+                </div>
+              </>
+            )}
           </section>
 
           <aside className="side-pane">
