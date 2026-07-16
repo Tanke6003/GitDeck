@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RepoInfo } from '@shared/types'
 import RepoDetail from './components/RepoDetail'
+import { applyTheme, initialTheme, type Theme } from './lib/theme'
 
 /**
  * Fase 1 + arranque de Fase 2: gestion de repos.
@@ -12,6 +13,11 @@ function App(): JSX.Element {
   const [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [gitVersion, setGitVersion] = useState('')
+  const [theme, setTheme] = useState<Theme>(initialTheme)
+  /** aviso no bloqueante (antes eran window.alert, que congelan el renderer) */
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => applyTheme(theme), [theme])
 
   const refresh = useCallback(async () => {
     const list = await window.api.listRepos()
@@ -37,10 +43,11 @@ function App(): JSX.Element {
     const dir = await window.api.pickFolder()
     if (!dir) return
     setBusy(true)
+    setNotice(null)
     const info = await window.api.addRepo(dir)
     setBusy(false)
     if (!info.valid) {
-      alert(`No se agrego: ${info.error ?? 'ruta invalida'}`)
+      setNotice(`No se agregó "${dir}": ${info.error ?? 'no parece un repositorio git'}`)
       return
     }
     await refresh()
@@ -51,10 +58,15 @@ function App(): JSX.Element {
     const dir = await window.api.pickFolder()
     if (!dir) return
     setBusy(true)
+    setNotice(null)
     const found = await window.api.scanFolder(dir)
     setBusy(false)
     await refresh()
-    if (found.length === 0) alert('No se encontraron repos git en esa carpeta.')
+    setNotice(
+      found.length === 0
+        ? `No se encontraron repos git dentro de "${dir}".`
+        : `Se agregaron ${found.length} repo(s).`
+    )
   }, [refresh])
 
   const onRemove = useCallback(
@@ -71,7 +83,16 @@ function App(): JSX.Element {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="sidebar-header">GitDeck</div>
+        <div className="sidebar-header">
+          GitDeck
+          <button
+            className="link theme-toggle"
+            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            title={`cambiar a tema ${theme === 'dark' ? 'claro' : 'oscuro'}`}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        </div>
 
         <div className="sidebar-actions">
           <button onClick={onAdd} disabled={busy} title="Agregar un repo por carpeta">
@@ -81,6 +102,15 @@ function App(): JSX.Element {
             ⟲ Escanear
           </button>
         </div>
+
+        {notice && (
+          <div className="notice">
+            <span>{notice}</span>
+            <button className="link" onClick={() => setNotice(null)} title="cerrar">
+              ✕
+            </button>
+          </div>
+        )}
 
         <div className="sidebar-section">
           Repositorios <span className="count">{repos.length}</span>

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BranchInfo, Commit, GitResult, MergePreview, RemoteInfo, RepoInfo } from '@shared/types'
+import { explainGitError } from '../lib/gitError'
 import CommitGraph from './CommitGraph'
 import AliasPanel from './AliasPanel'
 import CommitPanel from './CommitPanel'
@@ -51,6 +52,9 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
   const [editBranch, setEditBranch] = useState<string | null>(null)
   const [editBranchName, setEditBranchName] = useState('')
 
+  // explicacion legible del ultimo fallo de git (null si fue bien o no se reconoce)
+  const hint = useMemo(() => explainGitError(result), [result])
+
   const load = useCallback(async () => {
     if (!repo.valid) return
     setLoading(true)
@@ -87,6 +91,32 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
     return () => window.removeEventListener('focus', onFocus)
   }, [reloadAll])
 
+  const onFetchRef = useRef<() => void>(() => {})
+
+  /**
+   * Atajos de teclado. Solo combinaciones con Ctrl (y F5), asi que no hace falta
+   * comprobar si el foco esta en un input: no chocan con escribir.
+   * Ctrl+F lo maneja el propio buscador, que es quien tiene su input.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const ctrl = e.ctrlKey || e.metaKey
+      if (e.key === 'F5' || (ctrl && e.key.toLowerCase() === 'r')) {
+        e.preventDefault()
+        reloadAll()
+      } else if (ctrl && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        onFetchRef.current()
+      } else if (ctrl && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        setTab('tree')
+        setShowNewBranch((s) => !s)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reloadAll])
+
   const onFetch = useCallback(async () => {
     setBusy('fetch')
     const res = await window.api.fetchAll(repo.path)
@@ -94,6 +124,14 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
     setBusy(null)
     await reloadAll()
   }, [repo.path, reloadAll])
+
+  // el atajo llama al fetch de siempre; via ref para no re-registrar el listener
+  // en cada render (onFetch se recrea cuando cambia el repo)
+  useEffect(() => {
+    onFetchRef.current = () => {
+      if (!busy) onFetch()
+    }
+  }, [onFetch, busy])
 
   const onCreateBranch = useCallback(async () => {
     const name = newBranch.trim()
@@ -393,7 +431,11 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
         <div className="detail-actions">
           {tab === 'tree' && (
             <>
-              <button onClick={onFetch} disabled={!!busy} title="git fetch --all --prune">
+              <button
+                onClick={onFetch}
+                disabled={!!busy}
+                title="git fetch --all --prune (Ctrl+Shift+F)"
+              >
                 {busy === 'fetch' ? '⏳ fetch…' : '⟱ Fetch'}
               </button>
               <button onClick={onPull} disabled={!!busy} title="git pull">
@@ -402,7 +444,11 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
               <button onClick={onPush} disabled={!!busy} title="git push">
                 {busy === 'push' ? '⏳ push…' : '↑ Push'}
               </button>
-              <button onClick={() => setShowNewBranch((s) => !s)} disabled={!!busy}>
+              <button
+                onClick={() => setShowNewBranch((s) => !s)}
+                disabled={!!busy}
+                title="Crear una rama desde HEAD (Ctrl+B)"
+              >
                 ＋ Nueva rama
               </button>
               <button
@@ -414,7 +460,7 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
               </button>
             </>
           )}
-          <button onClick={reloadAll} disabled={!!busy} title="Recargar">
+          <button onClick={reloadAll} disabled={!!busy} title="Recargar (F5)">
             ↻
           </button>
           <button className="danger" onClick={() => onRemove(repo.path)} title="Quitar de la lista">
@@ -739,6 +785,13 @@ function RepoDetail({ repo, onRemove, onChanged }: Props): JSX.Element {
               ✕
             </button>
           </div>
+          {/* la explicación acompaña a la salida cruda, nunca la sustituye */}
+          {hint && (
+            <div className="ar-hint">
+              <b>{hint.title}</b>
+              <span>{hint.hint}</span>
+            </div>
+          )}
           <pre>{(result.stdout || result.stderr || '(sin salida)').trim()}</pre>
         </div>
       )}

@@ -31,6 +31,7 @@ function SearchBar({ repoPath, onResults, onPick, results }: Props): JSX.Element
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const req = useRef(0) // descarta respuestas de búsquedas ya superadas
+  const input = useRef<HTMLInputElement>(null)
 
   const search = useCallback(
     async (m: SearchMode, t: string) => {
@@ -61,13 +62,27 @@ function SearchBar({ repoPath, onResults, onPick, results }: Props): JSX.Element
     onResults(null)
   }, [onResults])
 
+  // Ctrl+F enfoca el buscador (lo maneja aqui: es quien tiene el input)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        input.current?.focus()
+        input.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <div className="search-wrap">
       <div className="search-bar">
         <span className="s-icon">⌕</span>
         <input
+          ref={input}
           className="s-input"
-          placeholder={MODES.find((m) => m.key === mode)?.hint}
+          placeholder={`${MODES.find((m) => m.key === mode)?.hint} — Ctrl+F`}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

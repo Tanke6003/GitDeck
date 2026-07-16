@@ -4,9 +4,16 @@
  * colores 16, 256 y truecolor. El texto se escapa antes de inyectarse.
  */
 
-// paleta base (tono catppuccin, para pegar con el tema oscuro)
-const STD = ['#45475a', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#bac2de']
-const BRIGHT = ['#585b70', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa', '#f5c2e7', '#94e2d5', '#a6adc8']
+/*
+ * Los 16 colores base salen de variables CSS (--ansi-0..15) en vez de hex fijos,
+ * asi el rojo/verde de un diff sigue al tema: los tonos pensados para fondo
+ * oscuro no se leen sobre fondo claro. Los valores estan en assets/main.css.
+ *
+ * Los colores de 256 y truecolor SI van literales: ahi el programa pidio un
+ * color exacto, y no hay a que mapearlo.
+ */
+const STD = Array.from({ length: 8 }, (_, i) => `var(--ansi-${i})`)
+const BRIGHT = Array.from({ length: 8 }, (_, i) => `var(--ansi-${i + 8})`)
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

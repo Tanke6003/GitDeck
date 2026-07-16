@@ -1,7 +1,23 @@
-:root {
+/*
+ * Tema oscuro por defecto (catppuccin mocha). El claro se activa poniendo
+ * data-theme="light" en <html>; lo hace el toggle de la cabecera y se recuerda
+ * en localStorage.
+ *
+ * --code-bg (paneles tipo terminal) y --input-bg (campos de texto) van separados
+ * porque no se aclaran igual.
+ *
+ * --ansi-0..15 son la paleta de 16 colores que usa lib/ansi.ts para pintar la
+ * salida real de git (el rojo/verde de los diffs). Vive aqui, y no en el TS,
+ * justo para poder cambiarla por tema: los tonos del oscuro no se leen sobre
+ * fondo claro.
+ */
+:root,
+:root[data-theme='dark'] {
   --bg: #1e1e2e;
   --bg-elev: #282a3a;
   --sidebar: #181825;
+  --code-bg: #11111b;
+  --input-bg: #11111b;
   --text: #cdd6f4;
   --text-dim: #9399b2;
   --accent: #89b4fa;
@@ -9,7 +25,62 @@
   --warn: #f9e2af;
   --danger: #f38ba8;
   --border: #313244;
+  --on-accent: #11111b;
   --mono: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+
+  /* ansi: negro, rojo, verde, amarillo, azul, magenta, cian, blanco */
+  --ansi-0: #45475a;
+  --ansi-1: #f38ba8;
+  --ansi-2: #a6e3a1;
+  --ansi-3: #f9e2af;
+  --ansi-4: #89b4fa;
+  --ansi-5: #f5c2e7;
+  --ansi-6: #94e2d5;
+  --ansi-7: #bac2de;
+  /* brillantes */
+  --ansi-8: #585b70;
+  --ansi-9: #f38ba8;
+  --ansi-10: #a6e3a1;
+  --ansi-11: #f9e2af;
+  --ansi-12: #89b4fa;
+  --ansi-13: #f5c2e7;
+  --ansi-14: #94e2d5;
+  --ansi-15: #a6adc8;
+}
+
+/* claro (catppuccin latte): mismos tonos, bajados de luminosidad para que
+   el texto de color siga siendo legible sobre fondo blanco */
+:root[data-theme='light'] {
+  --bg: #eff1f5;
+  --bg-elev: #e6e9ef;
+  --sidebar: #dce0e8;
+  --code-bg: #e6e9ef;
+  --input-bg: #ffffff;
+  --text: #4c4f69;
+  --text-dim: #6c6f85;
+  --accent: #1e66f5;
+  --ok: #40a02b;
+  --warn: #df8e1d;
+  --danger: #d20f39;
+  --border: #bcc0cc;
+  --on-accent: #ffffff;
+
+  --ansi-0: #5c5f77;
+  --ansi-1: #d20f39;
+  --ansi-2: #40a02b;
+  --ansi-3: #df8e1d;
+  --ansi-4: #1e66f5;
+  --ansi-5: #ea76cb;
+  --ansi-6: #179299;
+  --ansi-7: #4c4f69;
+  --ansi-8: #6c6f85;
+  --ansi-9: #d20f39;
+  --ansi-10: #40a02b;
+  --ansi-11: #df8e1d;
+  --ansi-12: #1e66f5;
+  --ansi-13: #ea76cb;
+  --ansi-14: #179299;
+  --ansi-15: #6c6f85;
 }
 
 * {
@@ -82,6 +153,32 @@ button.link:hover:not(:disabled) {
   color: var(--accent);
   margin-bottom: 16px;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.theme-toggle {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* aviso no bloqueante (sustituye a window.alert) */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+.notice span {
+  flex: 1;
+  word-break: break-word;
 }
 
 .sidebar-actions {
@@ -326,7 +423,7 @@ button.link:hover:not(:disabled) {
 }
 .new-branch-bar input {
   font-family: var(--mono);
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
@@ -569,7 +666,7 @@ button.link:hover:not(:disabled) {
   border-radius: 8px;
 }
 .add-remote input {
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
@@ -818,7 +915,7 @@ button.link:hover:not(:disabled) {
   padding: 8px;
   max-height: 260px;
   overflow: auto;
-  background: #11111b;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 11px;
@@ -950,7 +1047,7 @@ button.link:hover:not(:disabled) {
   white-space: nowrap;
 }
 .cd-diff {
-  background: #11111b;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
@@ -1121,7 +1218,7 @@ button.link:hover:not(:disabled) {
 .diff-view {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #11111b;
+  background: var(--code-bg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1164,7 +1261,7 @@ button.link:hover:not(:disabled) {
 }
 .ce-header select,
 .ce-header input {
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
@@ -1210,7 +1307,7 @@ button.link:hover:not(:disabled) {
   color: var(--accent);
 }
 .ce-body {
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
@@ -1248,7 +1345,9 @@ button.link:hover:not(:disabled) {
 }
 .commit-btn {
   background: var(--accent);
-  color: #11111b;
+  /* el acento es azul claro en oscuro y azul fuerte en claro: el texto encima
+     tiene que invertirse, o no se lee */
+  color: var(--on-accent);
   border: none;
   font-weight: 700;
   padding: 8px 18px;
@@ -1275,7 +1374,7 @@ button.link:hover:not(:disabled) {
 }
 .alias-filter {
   flex: 1;
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
@@ -1311,7 +1410,7 @@ button.link:hover:not(:disabled) {
 }
 .af-row input {
   flex: 1;
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
@@ -1401,7 +1500,7 @@ button.link:hover:not(:disabled) {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);
-  background: #11111b;
+  background: var(--code-bg);
   border-radius: 6px;
   padding: 6px 8px;
   white-space: pre-wrap;
@@ -1413,7 +1512,7 @@ button.link:hover:not(:disabled) {
 
 /* terminal de salida del alias */
 .term {
-  background: #11111b;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   position: sticky;
@@ -1493,7 +1592,7 @@ button.link:hover:not(:disabled) {
   bottom: 20px;
   width: 520px;
   max-width: calc(100vw - 320px);
-  background: #11111b;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
@@ -1504,6 +1603,23 @@ button.link:hover:not(:disabled) {
 }
 .action-result.err {
   border-left: 3px solid var(--danger);
+}
+/* explicación del fallo: va encima de la salida cruda, sin taparla */
+.ar-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ar-hint b {
+  color: var(--danger);
+}
+.ar-hint span {
+  color: var(--text-dim);
 }
 .ar-head {
   display: flex;
@@ -1945,7 +2061,7 @@ button.link:hover:not(:disabled) {
   flex-wrap: wrap;
 }
 .rl-branch input {
-  background: #11111b;
+  background: var(--input-bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
