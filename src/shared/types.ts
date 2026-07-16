@@ -85,6 +85,12 @@ export interface BranchInfo {
   /** fecha del ultimo commit, relativa */
   lastCommit: string
   subject: string
+  /** commits por delante del upstream */
+  ahead: number
+  /** commits por detras del upstream */
+  behind: number
+  /** el upstream ya no existe (rama borrada en el remoto) */
+  gone: boolean
 }
 
 /** Un remoto con sus URLs. */
@@ -131,4 +137,32 @@ export interface AliasInfo {
   desc: string | null
   /** true si es un alias de shell (empieza con '!') */
   isShell: boolean
+  /** marcado como favorito por el usuario (se guarda en userData/favorites.json) */
+  favorite: boolean
+}
+
+/** Un commit que entraria con un merge (linea del log HEAD..branch). */
+export interface IncomingCommit {
+  short: string
+  author: string
+  subject: string
+}
+
+/**
+ * Vista previa de un merge: que traeria fusionar `branch` en la rama actual,
+ * calculada SIN tocar el working tree (solo lecturas).
+ */
+export interface MergePreview {
+  /** rama que se fusionaria */
+  branch: string
+  /** true si no hay nada que traer (ya esta fusionada) */
+  upToDate: boolean
+  /** true si el merge seria fast-forward (HEAD es ancestro de branch) */
+  fastForward: boolean
+  /** commits que entrarian (log HEAD..branch), newest-first */
+  commits: IncomingCommit[]
+  /** resumen de archivos (diff --stat HEAD...branch) */
+  stat: string
+  /** null si se pudo calcular; mensaje de git si fallo (ej. rama inexistente) */
+  error: string | null
 }

@@ -45,6 +45,7 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<GitResult | null>(null)
   const [state, setState] = useState<RepoState | null>(null)
+  const [openErr, setOpenErr] = useState<string | null>(null)
 
   const staged = files.filter((f) => f.staged)
   const conflicts = files.filter((f) => f.conflicted)
@@ -103,6 +104,15 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
       await refresh()
     },
     [repoPath, refresh]
+  )
+
+  /** abre el archivo en conflicto en el editor por defecto del sistema */
+  const onOpenExternal = useCallback(
+    async (f: FileStatus) => {
+      const err = await window.api.openFile(repoPath, f.path)
+      if (err) setOpenErr(`No se pudo abrir ${f.path}: ${err}`)
+    },
+    [repoPath]
   )
   const onContinue = useCallback(async () => {
     setBusy(true)
@@ -209,6 +219,14 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
               <div className="pane-title conflict">
                 Conflictos <span className="count">{conflicts.length}</span>
               </div>
+              {openErr && (
+                <div className="open-err">
+                  {openErr}
+                  <button className="link" onClick={() => setOpenErr(null)}>
+                    ✕
+                  </button>
+                </div>
+              )}
               <ul className="file-list">
                 {conflicts.map((f) => (
                   <li
@@ -219,6 +237,16 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
                   >
                     <span className="fstat conf">!</span>
                     <span className="fpath">{f.path}</span>
+                    <button
+                      className="file-act"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onOpenExternal(f)
+                      }}
+                      title="abrir en el editor del sistema para resolver"
+                    >
+                      ↗
+                    </button>
                     <button
                       className="file-act ok"
                       onClick={(e) => {

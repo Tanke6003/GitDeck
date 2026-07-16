@@ -6,6 +6,7 @@ import type {
   CommitDetail,
   FileStatus,
   GitResult,
+  MergePreview,
   RemoteInfo,
   RepoInfo,
   RepoState
@@ -48,7 +49,23 @@ const api = {
   // --- acciones ---
   /** git fetch --all --prune */
   fetchAll: (repo: string): Promise<GitResult> => ipcRenderer.invoke('git:fetchAll', repo),
-  /** crea rama (y opcionalmente cambia a ella) */
+  /** git pull en la rama actual */
+  pull: (repo: string): Promise<GitResult> => ipcRenderer.invoke('git:pull', repo),
+  /** git push (con -u si setUpstream) */
+  push: (
+    repo: string,
+    opts?: { setUpstream?: boolean; remote?: string; branch?: string }
+  ): Promise<GitResult> => ipcRenderer.invoke('git:push', repo, opts),
+  /** agrega un remoto */
+  addRemote: (repo: string, name: string, url: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:addRemote', repo, name, url),
+  /** quita un remoto */
+  removeRemote: (repo: string, name: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:removeRemote', repo, name),
+  /** renombra un remoto */
+  renameRemote: (repo: string, oldName: string, newName: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:renameRemote', repo, oldName, newName),
+  /** crea rama (y opcionalmente cambia a ella); startPoint = commit/rama de origen */
   createBranch: (
     repo: string,
     name: string,
@@ -56,13 +73,31 @@ const api = {
     checkout?: boolean
   ): Promise<GitResult> =>
     ipcRenderer.invoke('git:createBranch', repo, name, startPoint, checkout),
-  /** cambia a una rama existente */
+  /** cambia a una rama local existente */
   checkout: (repo: string, name: string): Promise<GitResult> =>
     ipcRenderer.invoke('git:checkout', repo, name),
+  /** crea/cambia a la local que sigue a una remota (switch --track) */
+  checkoutRemote: (repo: string, remoteBranch: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:checkoutRemote', repo, remoteBranch),
+  /** borra una rama local (force = -D) */
+  deleteBranch: (repo: string, name: string, force?: boolean): Promise<GitResult> =>
+    ipcRenderer.invoke('git:deleteBranch', repo, name, force),
+  /** borra una rama en el remoto (push --delete) */
+  deleteRemoteBranch: (repo: string, remote: string, branch: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:deleteRemoteBranch', repo, remote, branch),
+  /** renombra una rama local */
+  renameBranch: (repo: string, oldName: string, newName: string): Promise<GitResult> =>
+    ipcRenderer.invoke('git:renameBranch', repo, oldName, newName),
+  /** que traeria fusionar `branch` en HEAD (solo lecturas) */
+  mergePreview: (repo: string, branch: string): Promise<MergePreview> =>
+    ipcRenderer.invoke('git:mergePreview', repo, branch),
 
   // --- alias ---
-  /** lista alias (global+local) con su desc.<name> */
+  /** lista alias (global+local) con su desc.<name> y su marca de favorito */
   aliases: (repo: string): Promise<AliasInfo[]> => ipcRenderer.invoke('alias:list', repo),
+  /** marca/desmarca un alias como favorito; devuelve la lista de favoritos */
+  toggleAliasFavorite: (name: string): Promise<string[]> =>
+    ipcRenderer.invoke('alias:toggleFavorite', name),
   /** ejecuta un alias en el repo (con color ANSI) */
   runAlias: (repo: string, name: string): Promise<GitResult> =>
     ipcRenderer.invoke('alias:run', repo, name),
@@ -104,9 +139,12 @@ const api = {
   rebaseContinue: (repo: string): Promise<GitResult> =>
     ipcRenderer.invoke('git:rebaseContinue', repo),
 
-  // --- dialogos ---
+  // --- dialogos / sistema ---
   /** abre el selector nativo de carpeta; null si se cancela */
-  pickFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickFolder')
+  pickFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickFolder'),
+  /** abre un archivo del repo en la app por defecto; '' si abrio bien */
+  openFile: (repo: string, relPath: string): Promise<string> =>
+    ipcRenderer.invoke('shell:openFile', repo, relPath)
 }
 
 export type GitDeckApi = typeof api

@@ -201,6 +201,8 @@ button.link:hover:not(:disabled) {
 .content {
   padding: 32px 40px;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .empty-state h1 {
@@ -344,9 +346,22 @@ button.link:hover:not(:disabled) {
 /* ---- detail body: grafo + panel lateral ---- */
 .detail-body {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 20px;
   align-items: start;
+}
+.graph-pane {
+  min-width: 0;
+}
+/* en pantallas angostas, apila el panel lateral debajo del grafo */
+@media (max-width: 1040px) {
+  .detail-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alias-body,
+  .commit-top {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }
 .pane-title {
   font-size: 12px;
@@ -520,10 +535,66 @@ button.link:hover:not(:disabled) {
   color: var(--text-dim);
   flex: 0 0 auto;
 }
+.b-sync {
+  display: flex;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--mono);
+  flex: 0 0 auto;
+}
+.b-sync .ahead {
+  color: var(--ok);
+}
+.b-sync .behind {
+  color: var(--warn);
+}
+.b-gone {
+  font-size: 9px;
+  color: var(--danger);
+  background: rgba(243, 139, 168, 0.14);
+  padding: 0 5px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+/* agregar remoto */
+.add-remote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.add-remote input {
+  background: #11111b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.add-remote input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.ar-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .remote-row {
   display: flex;
   flex-direction: column;
   padding: 5px 8px;
+}
+.rm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .rm-name {
   font-size: 13px;
@@ -760,7 +831,7 @@ button.link:hover:not(:disabled) {
 }
 .commit-top {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -1046,7 +1117,7 @@ button.link:hover:not(:disabled) {
 
 .alias-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
   min-height: 0;
@@ -1242,4 +1313,300 @@ button.link:hover:not(:disabled) {
   word-break: break-word;
   max-height: 240px;
   overflow: auto;
+}
+
+/* ---- dialogo de confirmacion (checkout sucio, borrar rama…) ---- */
+.cf-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cf-dialog {
+  width: 460px;
+  max-width: 92vw;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  animation: cf-pop 0.14s ease-out;
+}
+@keyframes cf-pop {
+  from {
+    transform: scale(0.97);
+    opacity: 0.5;
+  }
+}
+.cf-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.cf-title code {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+.cf-message {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.cf-message code {
+  font-family: var(--mono);
+  color: var(--text);
+}
+.cf-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+/* ---- vista previa de merge ---- */
+.mp-dialog {
+  width: 680px;
+  display: flex;
+  flex-direction: column;
+  max-height: 82vh;
+}
+.mp-loading,
+.mp-uptodate,
+.mp-error {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 14px 0;
+  line-height: 1.5;
+}
+.mp-error {
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.mp-uptodate code,
+.mp-loading code {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+.mp-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+.mp-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+  flex-wrap: wrap;
+}
+.mp-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+.mp-badge.ff {
+  background: rgba(166, 227, 161, 0.16);
+  color: var(--ok);
+}
+.mp-badge.mc {
+  background: rgba(249, 226, 175, 0.16);
+  color: var(--warn);
+}
+.mp-commits {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.mp-commit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.mp-commit:last-child {
+  border-bottom: none;
+}
+.mp-sha {
+  font-family: var(--mono);
+  color: var(--warn);
+  flex: 0 0 auto;
+}
+.mp-subject {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mp-author {
+  color: var(--text-dim);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+.mp-stat {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre;
+}
+
+/* ---- edicion en linea de rama / remoto ---- */
+.branch-row.editing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.b-edit,
+.rm-edit {
+  flex: 1;
+  min-width: 0;
+  background: var(--sidebar);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-family: var(--mono);
+  outline: none;
+}
+.branch-row.editing button {
+  font-size: 10px;
+  padding: 2px 7px;
+  flex: 0 0 auto;
+}
+.b-actions button.del:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ---- crear rama desde un commit (drawer) ---- */
+.cd-branch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  flex-wrap: wrap;
+}
+.cd-branch input[type='text'],
+.cd-branch input:not([type]) {
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 13px;
+  font-family: var(--mono);
+  outline: none;
+}
+.cd-branch input:focus {
+  border-color: var(--accent);
+}
+.cd-co {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.cd-branch .hint {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cd-branch .hint code {
+  font-family: var(--mono);
+  color: var(--warn);
+}
+.cd-branch-err {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--danger);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: pre-wrap;
+}
+
+/* ---- favoritos de alias ---- */
+.alias-favs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+.af-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--warn);
+  flex: 0 0 auto;
+}
+.fav-chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(249, 226, 175, 0.1);
+  border-color: rgba(249, 226, 175, 0.3);
+}
+.fav-chip:hover:not(:disabled) {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.fav-star {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+.fav-star:hover {
+  color: var(--warn);
+}
+.fav-star.on {
+  color: var(--warn);
+}
+.alias-item.fav {
+  border-left: 2px solid var(--warn);
+}
+
+/* ---- error al abrir archivo en el editor externo ---- */
+.open-err {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--danger);
+  background: rgba(243, 139, 168, 0.1);
+  border-radius: 5px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+}
+.open-err button {
+  margin-left: auto;
 }

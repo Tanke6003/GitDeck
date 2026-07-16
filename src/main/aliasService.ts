@@ -1,16 +1,20 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { runGit } from './gitRunner'
+import { loadFavorites, saveFavorites } from './aliasStore'
 import type { AliasInfo, GitResult } from '@shared/types'
 
 /**
  * Lee todos los alias efectivos en el repo (global + local) junto con su
  * descripcion opcional `desc.<name>` — igual que el alias `alias` del usuario.
+ * Los favoritos (userData/favorites.json) vienen ya marcados en cada alias.
  */
 export async function getAliases(repo: string): Promise<AliasInfo[]> {
-  const [aliasRes, descRes] = await Promise.all([
+  const [aliasRes, descRes, favorites] = await Promise.all([
     runGit(['config', '--get-regexp', '^alias\\.'], repo),
-    runGit(['config', '--get-regexp', '^desc\\.'], repo)
+    runGit(['config', '--get-regexp', '^desc\\.'], repo),
+    loadFavorites()
   ])
+  const favSet = new Set(favorites)
 
   // mapa name -> descripcion
   const descMap = new Map<string, string>()
@@ -35,7 +39,8 @@ export async function getAliases(repo: string): Promise<AliasInfo[]> {
       name,
       command,
       desc: descMap.get(name) ?? null,
-      isShell: command.startsWith('!')
+      isShell: command.startsWith('!'),
+      favorite: favSet.has(name)
     })
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
@@ -97,9 +102,12 @@ export async function setAlias(name: string, command: string, desc?: string): Pr
   return res
 }
 
-/** Borra un alias global y su descripcion (best-effort). */
+/** Borra un alias global, su descripcion y su marca de favorito (best-effort). */
 export async function deleteAlias(name: string): Promise<GitResult> {
   const res = await runGit(['config', '--global', '--unset', `alias.${name}`])
   await runGit(['config', '--global', '--unset', `desc.${name}`]) // ignora si no existe
+  // si estaba en favoritos, quitarlo: si no, quedaria un favorito fantasma
+  const favorites = await loadFavorites()
+  if (favorites.includes(name)) await saveFavorites(favorites.filter((n) => n !== name))
   return res
 }

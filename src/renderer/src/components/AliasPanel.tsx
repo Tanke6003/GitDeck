@@ -11,7 +11,8 @@ interface Output {
 
 /**
  * Panel de alias (Fase 5): lista todos los alias con su descripcion (desc.<name>)
- * y su comando real, permite ejecutarlos (salida con color ANSI) y crear/borrar.
+ * y su comando real, permite ejecutarlos (salida con color ANSI), marcarlos como
+ * favoritos (accesos rapidos arriba) y crear/editar/borrar.
  */
 function AliasPanel({ repoPath }: { repoPath: string }): JSX.Element {
   const [aliases, setAliases] = useState<AliasInfo[]>([])
@@ -82,6 +83,16 @@ function AliasPanel({ repoPath }: { repoPath: string }): JSX.Element {
     [load]
   )
 
+  const toggleFavorite = useCallback(
+    async (a: AliasInfo) => {
+      const favorites = await window.api.toggleAliasFavorite(a.name)
+      const favSet = new Set(favorites)
+      // reflejamos la respuesta del store en vez de invertir el flag a ciegas
+      setAliases((list) => list.map((x) => ({ ...x, favorite: favSet.has(x.name) })))
+    },
+    []
+  )
+
   const shown = useMemo(() => {
     const f = filter.trim().toLowerCase()
     if (!f) return aliases
@@ -92,6 +103,14 @@ function AliasPanel({ repoPath }: { repoPath: string }): JSX.Element {
         a.command.toLowerCase().includes(f)
     )
   }, [aliases, filter])
+
+  // los favoritos primero (el orden alfabetico ya viene del main)
+  const sorted = useMemo(
+    () => [...shown].sort((a, b) => Number(b.favorite) - Number(a.favorite)),
+    [shown]
+  )
+
+  const favorites = useMemo(() => aliases.filter((a) => a.favorite), [aliases])
 
   return (
     <div className="alias-panel">
@@ -114,6 +133,23 @@ function AliasPanel({ repoPath }: { repoPath: string }): JSX.Element {
           ＋ Nuevo alias
         </button>
       </div>
+
+      {favorites.length > 0 && (
+        <div className="alias-favs">
+          <span className="af-label">★ Favoritos</span>
+          {favorites.map((a) => (
+            <button
+              key={a.name}
+              className="fav-chip"
+              onClick={() => run(a)}
+              disabled={running !== null}
+              title={a.desc ? `${a.desc} — git ${a.name}` : `git ${a.name}`}
+            >
+              {running === a.name ? '⏳' : '▶'} {a.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {showNew && (
         <div className="alias-form">
@@ -151,10 +187,17 @@ function AliasPanel({ repoPath }: { repoPath: string }): JSX.Element {
 
       <div className="alias-body">
         <ul className="alias-list">
-          {shown.length === 0 && <li className="mini pad">sin alias que coincidan</li>}
-          {shown.map((a) => (
-            <li key={a.name} className="alias-item">
+          {sorted.length === 0 && <li className="mini pad">sin alias que coincidan</li>}
+          {sorted.map((a) => (
+            <li key={a.name} className={`alias-item ${a.favorite ? 'fav' : ''}`}>
               <div className="alias-head">
+                <button
+                  className={`fav-star ${a.favorite ? 'on' : ''}`}
+                  onClick={() => toggleFavorite(a)}
+                  title={a.favorite ? 'quitar de favoritos' : 'marcar como favorito'}
+                >
+                  {a.favorite ? '★' : '☆'}
+                </button>
                 <span className="alias-name">{a.name}</span>
                 {a.isShell && <span className="alias-tag">shell !</span>}
                 <span className="spacer" />

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
-import type { CommitDetail } from '@shared/types'
+import { useCallback, useEffect, useState } from 'react'
+import type { CommitDetail, GitResult } from '@shared/types'
 import { ansiToHtml } from '../lib/ansi'
 
 interface Props {
   repoPath: string
   hash: string
+  /** hay cambios sin commitear: el checkout de la rama nueva puede arrastrarlos */
+  dirty: boolean
+  /** avisar al padre para refrescar grafo/ramas tras crear una rama */
+  onBranchCreated: () => void
   onClose: () => void
 }
 
@@ -21,12 +25,26 @@ function statusClass(status: string): string {
  * Panel deslizante con el detalle de un commit: mensaje completo, autor/fecha,
  * archivos cambiados y el diff con color. Se abre al hacer click en el árbol.
  */
-function CommitDetailDrawer({ repoPath, hash, onClose }: Props): JSX.Element {
+function CommitDetailDrawer({
+  repoPath,
+  hash,
+  dirty,
+  onBranchCreated,
+  onClose
+}: Props): JSX.Element {
   const [detail, setDetail] = useState<CommitDetail | null>(null)
+  const [showBranch, setShowBranch] = useState(false)
+  const [branchName, setBranchName] = useState('')
+  const [checkout, setCheckout] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [branchRes, setBranchRes] = useState<GitResult | null>(null)
 
   useEffect(() => {
     let alive = true
     setDetail(null)
+    setShowBranch(false)
+    setBranchName('')
+    setBranchRes(null)
     window.api.commitDetail(repoPath, hash).then((d) => {
       if (alive) setDetail(d)
     })
@@ -35,6 +53,21 @@ function CommitDetailDrawer({ repoPath, hash, onClose }: Props): JSX.Element {
     }
   }, [repoPath, hash])
 
+  const createBranch = useCallback(async () => {
+    const name = branchName.trim()
+    if (!name) return
+    setBusy(true)
+    // startPoint = este commit: la rama nace aqui, no en HEAD
+    const res = await window.api.createBranch(repoPath, name, hash, checkout)
+    setBranchRes(res)
+    setBusy(false)
+    if (res.ok) {
+      setBranchName('')
+      setShowBranch(false)
+      onBranchCreated()
+    }
+  }, [branchName, repoPath, hash, checkout, onBranchCreated])
+
   return (
     <div className="cd-overlay" onClick={onClose}>
       <div className="cd-drawer" onClick={(e) => e.stopPropagation()}>
@@ -42,10 +75,51 @@ function CommitDetailDrawer({ repoPath, hash, onClose }: Props): JSX.Element {
           <span className="cd-sha">{detail?.short || hash.slice(0, 7)}</span>
           {detail && detail.parents.length > 1 && <span className="cd-merge">merge</span>}
           <span className="spacer" />
+          <button
+            className="link"
+            onClick={() => setShowBranch((s) => !s)}
+            title="crear una rama en este commit"
+          >
+            ⑂ rama aquí
+          </button>
           <button className="link" onClick={onClose} title="cerrar">
             ✕
           </button>
         </div>
+
+        {showBranch && (
+          <div className="cd-branch">
+            <input
+              autoFocus
+              placeholder="nombre-de-la-rama"
+              value={branchName}
+              onChange={(e) => setBranchName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') createBranch()
+                if (e.key === 'Escape') setShowBranch(false)
+              }}
+            />
+            <label className="cd-co">
+              <input
+                type="checkbox"
+                checked={checkout}
+                onChange={(e) => setCheckout(e.target.checked)}
+              />
+              cambiar a ella
+            </label>
+            <button onClick={createBranch} disabled={busy || !branchName.trim()}>
+              {busy ? 'creando…' : 'Crear'}
+            </button>
+            <span className="hint">
+              nace en <code>{detail?.short || hash.slice(0, 7)}</code>
+              {checkout && dirty && ' — ojo: tienes cambios sin guardar'}
+            </span>
+          </div>
+        )}
+
+        {branchRes && !branchRes.ok && (
+          <div className="cd-branch-err">{(branchRes.stderr || 'error').trim()}</div>
+        )}
 
         {!detail ? (
           <div className="cd-loading">cargando…</div>

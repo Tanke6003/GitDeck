@@ -74,6 +74,8 @@ function apply(state: State, codes: number[]): void {
 }
 
 export function ansiToHtml(input: string): string {
+  // el ESC (\x1b) es justo lo que abre una secuencia SGR; no es un control accidental
+  // eslint-disable-next-line no-control-regex
   const re = /\x1b\[([0-9;]*)m/g
   const state = fresh()
   let out = ''

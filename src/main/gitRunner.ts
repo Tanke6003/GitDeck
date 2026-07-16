@@ -14,7 +14,8 @@ import type { GitResult } from '@shared/types'
 export function runGit(
   args: string[],
   cwd?: string,
-  extraEnv?: Record<string, string>
+  extraEnv?: Record<string, string>,
+  timeoutMs = 60_000
 ): Promise<GitResult> {
   const cmd = `git ${args.join(' ')}`
   return new Promise((resolve) => {
@@ -26,7 +27,7 @@ export function runGit(
         // buffer amplio para logs largos; se paginara en fases futuras
         maxBuffer: 32 * 1024 * 1024,
         windowsHide: true,
-        timeout: 60_000,
+        timeout: timeoutMs,
         // forzar salida en UTF-8 sin depender del locale de Windows
         env: { ...process.env, LC_ALL: 'C.UTF-8', ...extraEnv }
       },

@@ -1,18 +1,29 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join } from 'path'
+import { join, resolve, sep } from 'path'
 import { runGit } from './gitRunner'
 import { loadRepoPaths, saveRepoPaths } from './repoStore'
 import { discoverRepos, getRepoInfo } from './repoService'
 import {
+  addRemote,
   checkoutBranch,
+  checkoutRemoteBranch,
   createBranch,
+  deleteBranch,
+  deleteRemoteBranch,
   fetchAll,
   getBranches,
   getCommitDetail,
   getCommits,
-  getRemotes
+  getMergePreview,
+  getRemotes,
+  pull,
+  push,
+  removeRemote,
+  renameBranch,
+  renameRemote
 } from './gitService'
 import { deleteAlias, getAliases, runAlias, setAlias, stopAlias } from './aliasService'
+import { toggleFavorite } from './aliasStore'
 import {
   commit,
   getStagedDiff,
@@ -117,15 +128,44 @@ function registerIpc(): void {
 
   // -- acciones --
   ipcMain.handle('git:fetchAll', (_e, repo: string) => fetchAll(repo))
+  ipcMain.handle('git:pull', (_e, repo: string) => pull(repo))
+  ipcMain.handle(
+    'git:push',
+    (_e, repo: string, opts?: { setUpstream?: boolean; remote?: string; branch?: string }) =>
+      push(repo, opts)
+  )
+  ipcMain.handle('git:addRemote', (_e, repo: string, name: string, url: string) =>
+    addRemote(repo, name, url)
+  )
+  ipcMain.handle('git:removeRemote', (_e, repo: string, name: string) => removeRemote(repo, name))
+  ipcMain.handle('git:renameRemote', (_e, repo: string, oldName: string, newName: string) =>
+    renameRemote(repo, oldName, newName)
+  )
   ipcMain.handle(
     'git:createBranch',
     (_e, repo: string, name: string, startPoint?: string, checkout?: boolean) =>
       createBranch(repo, name, startPoint, checkout)
   )
   ipcMain.handle('git:checkout', (_e, repo: string, name: string) => checkoutBranch(repo, name))
+  ipcMain.handle('git:checkoutRemote', (_e, repo: string, remoteBranch: string) =>
+    checkoutRemoteBranch(repo, remoteBranch)
+  )
+  ipcMain.handle('git:deleteBranch', (_e, repo: string, name: string, force?: boolean) =>
+    deleteBranch(repo, name, force)
+  )
+  ipcMain.handle('git:deleteRemoteBranch', (_e, repo: string, remote: string, branch: string) =>
+    deleteRemoteBranch(repo, remote, branch)
+  )
+  ipcMain.handle('git:renameBranch', (_e, repo: string, oldName: string, newName: string) =>
+    renameBranch(repo, oldName, newName)
+  )
+  ipcMain.handle('git:mergePreview', (_e, repo: string, branch: string) =>
+    getMergePreview(repo, branch)
+  )
 
   // -- alias --
   ipcMain.handle('alias:list', (_e, repo: string) => getAliases(repo))
+  ipcMain.handle('alias:toggleFavorite', (_e, name: string) => toggleFavorite(name))
   ipcMain.handle('alias:run', (_e, repo: string, name: string) => runAlias(repo, name))
   ipcMain.handle('alias:stop', () => stopAlias())
   ipcMain.handle('alias:set', (_e, name: string, command: string, desc?: string) =>
@@ -154,6 +194,16 @@ function registerIpc(): void {
   ipcMain.handle('git:rebaseAbort', (_e, repo: string) => rebaseAbort(repo))
   ipcMain.handle('git:mergeContinue', (_e, repo: string) => mergeContinue(repo))
   ipcMain.handle('git:rebaseContinue', (_e, repo: string) => rebaseContinue(repo))
+
+  // -- abrir archivo en el editor/app por defecto del sistema --
+  ipcMain.handle('shell:openFile', async (_e, repo: string, relPath: string): Promise<string> => {
+    // el renderer solo manda rutas relativas del repo; nos aseguramos de que
+    // el resultado no se escape de la carpeta del repo antes de abrir nada
+    const target = resolve(repo, relPath)
+    const root = resolve(repo)
+    if (target !== root && !target.startsWith(root + sep)) return 'ruta fuera del repositorio'
+    return shell.openPath(target) // '' si abrio bien, mensaje de error si no
+  })
 
   // -- dialogos nativos --
   ipcMain.handle('dialog:pickFolder', async (): Promise<string | null> => {
