@@ -19,10 +19,44 @@ npm install       # instalar dependencias
 npm run dev       # levantar la app en modo desarrollo (hot reload)
 ```
 
+## Empaquetado (.exe)
+
+```bash
+npm run build:win   # instalador NSIS -> dist/GitDeck-<version>-setup.exe
+npm run build:dir   # solo la carpeta dist/win-unpacked (mas rapido para probar)
+```
+
+La configuración vive en `electron-builder.yml`. El instalador **no** borra
+`userData` al desinstalar, así la lista de repos (`repos.json`) sobrevive a una
+reinstalación.
+
+### Si el build falla con "Cannot create symbolic link"
+
+electron-builder descarga su toolset `winCodeSign`, cuyo `.7z` trae **symlinks de
+macOS** (`libcrypto.dylib`, `libssl.dylib`). Windows no deja crearlos sin Modo
+Desarrollador o permisos de admin, 7-Zip devuelve error y electron-builder
+reintenta y falla — aunque esos archivos no se usan para nada en Windows.
+
+Solución: dejar el toolset ya extraído en la caché, sin la carpeta `darwin`.
+El nombre de la carpeta debe ser exactamente `winCodeSign-2.6.0`:
+
+```bash
+CACHE="$LOCALAPPDATA/electron-builder/Cache/winCodeSign"
+mkdir -p "$CACHE"
+curl -sL -o "$CACHE/winCodeSign-2.6.0.7z" \
+  https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z
+node_modules/7zip-bin/win/x64/7za.exe x -bd \
+  "$CACHE/winCodeSign-2.6.0.7z" "-o$CACHE/winCodeSign-2.6.0" "-x!darwin" -y
+```
+
+La alternativa es activar el Modo Desarrollador de Windows (Configuración →
+Privacidad y seguridad → Para desarrolladores), que permite crear symlinks sin
+elevar.
+
 ## Otros scripts
 
 ```bash
-npm run build     # compilar main + preload + renderer a ./out
+npm run build     # typecheck + compilar main + preload + renderer a ./out
 npm run start     # previsualizar el build
 npm run typecheck # chequeo de tipos (node + web)
 npm run lint      # eslint

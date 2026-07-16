@@ -1,0 +1,35 @@
+appId: com.tanke6003.gitdeck
+productName: GitDeck
+copyright: Copyright (c) 2026 tanke6003
+
+directories:
+  buildResources: build
+  output: dist
+
+# solo lo construido por electron-vite + el manifiesto; las devDependencies
+# (electron, vite, typescript...) las excluye electron-builder por si solas.
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: ${productName}-${version}-setup.${ext}
+
+nsis:
+  # instalador con asistente (no one-click) para poder elegir carpeta
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: GitDeck
+  # la lista de repos vive en userData/repos.json: al desinstalar NO la borramos,
+  # asi una reinstalacion recupera los repos ya agregados.
+  deleteAppDataOnUninstall: false
