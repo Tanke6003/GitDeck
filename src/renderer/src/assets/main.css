@@ -1714,6 +1714,90 @@ button.link:hover:not(:disabled) {
   color: var(--danger);
 }
 
+/* ---- staging por hunk ---- */
+.hk-wrap {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.hk-empty {
+  padding: 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.hk-block {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.hk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.hk-title {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hk-stat {
+  font-family: var(--mono);
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+.hk-stat .add {
+  color: var(--ok);
+}
+.hk-stat .del {
+  color: var(--danger);
+}
+.hk-bar button {
+  font-size: 11px;
+  padding: 2px 8px;
+  flex: 0 0 auto;
+}
+.hk-code {
+  margin: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.hk-line {
+  padding: 0 8px;
+  white-space: pre;
+}
+.hk-line.add {
+  background: rgba(166, 227, 161, 0.12);
+  color: var(--ok);
+}
+.hk-line.del {
+  background: rgba(243, 139, 168, 0.12);
+  color: var(--danger);
+}
+.hk-line.hh {
+  background: var(--bg-elev);
+  color: var(--text-dim);
+}
+.hk-line.meta {
+  color: var(--text-dim);
+  font-style: italic;
+}
+/* botón de modo activo en la barra del diff */
+.pane-title .link.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ---- blame / reflog (diálogo ancho centrado) ---- */
 .bl-dialog {
   position: relative;

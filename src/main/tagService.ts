@@ -22,8 +22,14 @@ export async function listTags(repo: string): Promise<TagInfo[]> {
     '%(*creatordate:relative)',
     '%(creatordate:relative)'
   ].join(SEP)
-  // -creatordate: los mas nuevos primero
-  const res = await runGit(['for-each-ref', `--format=${fmt}`, '--sort=-creatordate', 'refs/tags'], repo)
+  // Los mas nuevos primero. El ULTIMO --sort es el primario, asi que aqui manda
+  // -creatordate y -refname solo desempata: varios tags creados en el mismo
+  // segundo empatan, y el desempate por defecto de git es refname ASCENDENTE,
+  // que dejaria v1.0.0 por encima de v2.0.0 — al reves de lo que promete esto.
+  const res = await runGit(
+    ['for-each-ref', `--format=${fmt}`, '--sort=-refname', '--sort=-creatordate', 'refs/tags'],
+    repo
+  )
   if (!res.ok) return []
 
   const out: TagInfo[] = []

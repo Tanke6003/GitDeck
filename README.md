@@ -53,6 +53,19 @@ La alternativa es activar el Modo Desarrollador de Windows (Configuración →
 Privacidad y seguridad → Para desarrolladores), que permite crear symlinks sin
 elevar.
 
+## Pruebas
+
+```bash
+npm test          # una pasada
+npm run test:watch
+```
+
+Los tests (`src/main/__tests__/`) corren contra el binario **git real**, sobre
+repos temporales que se crean al vuelo (`fixture.ts`), en vez de simular la
+salida de git: lo que se comprueba es justo que los parseos aguanten lo que git
+escribe de verdad, incluidos los casos raros (tags anotados vs ligeros, hunks
+sin salto de línea final, `author-mail` en el blame, upstream `gone`…).
+
 ## Otros scripts
 
 ```bash

@@ -145,6 +145,30 @@ export interface AliasInfo {
   favorite: boolean
 }
 
+/** Un trozo contiguo de cambios dentro de un archivo (un "@@" del diff). */
+export interface Hunk {
+  /** posicion dentro del archivo (0 = el primero) */
+  index: number
+  /** la linea "@@ -a,b +c,d @@ …" */
+  header: string
+  /** el hunk entero tal cual lo escribio git (cabecera incluida) */
+  text: string
+  /** lineas agregadas */
+  added: number
+  /** lineas quitadas */
+  removed: number
+}
+
+/** El diff de un archivo, ya troceado en hunks. */
+export interface FileDiff {
+  path: string
+  /** cabecera del parche (diff --git / index / --- / +++) */
+  header: string
+  hunks: Hunk[]
+  /** binario: no hay hunks que preparar por separado */
+  binary: boolean
+}
+
 /** Una linea de `git blame`: el commit que la introdujo + su contenido. */
 export interface BlameLine {
   hash: string

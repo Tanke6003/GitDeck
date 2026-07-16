@@ -43,6 +43,7 @@ import {
   pushTag
 } from './tagService'
 import { getBlame, getReflog } from './blameService'
+import { applyHunk, getFileHunks } from './hunkService'
 import {
   commit,
   getStagedDiff,
@@ -61,7 +62,7 @@ import {
   rebase,
   revert
 } from './mergeService'
-import type { PendingOp, RepoInfo, SearchMode } from '@shared/types'
+import type { FileDiff, PendingOp, RepoInfo, SearchMode } from '@shared/types'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -223,6 +224,16 @@ function registerIpc(): void {
     getBlame(repo, path, rev)
   )
   ipcMain.handle('git:reflog', (_e, repo: string, limit?: number) => getReflog(repo, limit))
+
+  // -- staging por hunk --
+  ipcMain.handle('hunk:list', (_e, repo: string, path: string, cached?: boolean) =>
+    getFileHunks(repo, path, cached)
+  )
+  ipcMain.handle(
+    'hunk:apply',
+    (_e, repo: string, file: FileDiff, index: number, reverse?: boolean) =>
+      applyHunk(repo, file, index, reverse)
+  )
 
   // -- alias --
   ipcMain.handle('alias:list', (_e, repo: string) => getAliases(repo))

@@ -5,6 +5,7 @@ import type {
   BranchInfo,
   Commit,
   CommitDetail,
+  FileDiff,
   FileStatus,
   GitResult,
   MergePreview,
@@ -150,6 +151,18 @@ const api = {
   /** publica todos los tags que falten en el remoto */
   pushAllTags: (repo: string, remote: string): Promise<GitResult> =>
     ipcRenderer.invoke('tag:pushAll', repo, remote),
+
+  // --- staging por hunk ---
+  /** diff de un archivo troceado en hunks (cached = lo ya preparado) */
+  fileHunks: (repo: string, path: string, cached?: boolean): Promise<FileDiff | null> =>
+    ipcRenderer.invoke('hunk:list', repo, path, cached),
+  /** prepara (o con reverse quita) un solo hunk, sin tocar el archivo en disco */
+  applyHunk: (
+    repo: string,
+    file: FileDiff,
+    index: number,
+    reverse?: boolean
+  ): Promise<GitResult> => ipcRenderer.invoke('hunk:apply', repo, file, index, reverse),
 
   // --- blame / reflog ---
   /** quien escribio cada linea de un archivo (opcionalmente en una revision) */

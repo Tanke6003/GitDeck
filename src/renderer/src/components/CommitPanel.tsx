@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FileStatus, GitResult, PendingOp, RepoState } from '@shared/types'
 import { ansiToHtml } from '../lib/ansi'
+import HunkView from './HunkView'
 
 /** Como se llama cada operacion a medias en el banner. */
 const OP_LABEL: Record<PendingOp, string> = {
@@ -43,6 +44,12 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   const [files, setFiles] = useState<FileStatus[]>([])
   const [diffHtml, setDiffHtml] = useState<string>('')
   const [diffFile, setDiffFile] = useState<string | null>(null)
+  /** el diff abierto es del index (true) o del working tree (false) */
+  const [diffCached, setDiffCached] = useState(true)
+  /** ver el archivo troceado en hunks en vez del diff completo */
+  const [byHunk, setByHunk] = useState(false)
+  /** el archivo abierto es nuevo sin trackear: no hay hunks que dividir */
+  const [diffUntracked, setDiffUntracked] = useState(false)
 
   const [type, setType] = useState('')
   const [scope, setScope] = useState('')
@@ -64,6 +71,7 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
       const res = await window.api.stagedDiff(repoPath, path, cached)
       setDiffHtml(ansiToHtml((res.stdout || '').replace(/\s+$/, '')))
       setDiffFile(path ?? null)
+      setDiffCached(cached)
     },
     [repoPath]
   )
@@ -178,8 +186,18 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
     <li
       key={f.path}
       className={`file-row ${diffFile === f.path ? 'active' : ''}`}
-      onClick={() => (staged ? loadDiff(f.path) : undefined)}
-      title={staged ? 'ver diff' : f.path}
+      onClick={() => {
+        // un archivo nuevo sin trackear no tiene diff: git no sabe de el todavia
+        setDiffUntracked(f.untracked)
+        if (f.untracked) {
+          setDiffFile(f.path)
+          setDiffHtml('')
+          setByHunk(false)
+        } else {
+          loadDiff(f.path, staged)
+        }
+      }}
+      title={f.untracked ? `${f.path} (nuevo)` : 'ver diff'}
     >
       <span className={`fstat ${f.untracked ? 'new' : ''}`}>
         {f.untracked ? '?' : staged ? f.index : f.work}
@@ -297,17 +315,60 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
 
         <div className="diff-view">
           <div className="pane-title">
-            Diff preparado {diffFile ? <span className="mini">— {diffFile}</span> : <span className="mini">— todo</span>}
+            Diff {diffCached ? 'preparado' : 'sin preparar'}
+            {diffFile ? (
+              <span className="mini">— {diffFile}</span>
+            ) : (
+              <span className="mini">— todo</span>
+            )}
+            {diffFile && !diffUntracked && (
+              <button
+                className={`link ${byHunk ? 'on' : ''}`}
+                onClick={() => setByHunk((s) => !s)}
+                title={
+                  byHunk
+                    ? 'ver el diff completo'
+                    : `preparar o quitar trozos sueltos de ${diffFile}`
+                }
+              >
+                {byHunk ? 'diff completo' : '⧉ por hunk'}
+              </button>
+            )}
             {diffFile && (
-              <button className="link" onClick={() => loadDiff()}>
+              <button
+                className="link"
+                onClick={() => {
+                  setByHunk(false)
+                  setDiffUntracked(false)
+                  loadDiff()
+                }}
+              >
                 ver todo
               </button>
             )}
           </div>
-          {diffHtml ? (
+
+          {diffUntracked ? (
+            <div className="diff-empty">
+              Archivo nuevo sin trackear: git aún no lo conoce, así que no hay diff que dividir.
+              Prepáralo entero con ＋.
+            </div>
+          ) : byHunk && diffFile ? (
+            <HunkView
+              repoPath={repoPath}
+              path={diffFile}
+              cached={diffCached}
+              onApplied={refresh}
+              onResult={setResult}
+            />
+          ) : diffHtml ? (
             <pre className="diff-body" dangerouslySetInnerHTML={{ __html: diffHtml }} />
           ) : (
-            <div className="diff-empty">Nada preparado. Prepara archivos (＋) para ver el diff.</div>
+            <div className="diff-empty">
+              {diffCached
+                ? 'Nada preparado. Prepara archivos (＋) para ver el diff.'
+                : 'Sin cambios sin preparar.'}
+            </div>
           )}
         </div>
       </div>
