@@ -1,13 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Fixture } from './fixture'
 import {
+  diffRange,
   getBranches,
   getCommitDetail,
   getCommits,
   getMergePreview,
   getRemotes,
+  merge,
   searchCommits
 } from '../gitService'
+import type { ReadResult } from '@shared/types'
+
+/** desenvuelve un ReadResult exigiendo que la lectura fue bien */
+async function ok<T>(p: Promise<ReadResult<T>>): Promise<T> {
+  const r = await p
+  expect(r.error).toBeNull()
+  return r.data
+}
 
 describe('gitService', () => {
   let fx: Fixture
@@ -22,7 +32,7 @@ describe('gitService', () => {
       fx.commit('primero', { 'a.txt': 'a\n' })
       fx.commit('segundo', { 'b.txt': 'b\n' })
 
-      const commits = await getCommits(fx.dir)
+      const commits = await ok(getCommits(fx.dir))
       expect(commits).toHaveLength(2)
       // newest-first
       expect(commits[0].subject).toBe('segundo')
@@ -41,7 +51,7 @@ describe('gitService', () => {
       fx.commit('en otra', { 'c.txt': 'c\n' })
       fx.git('switch', '-q', 'main')
 
-      const subjects = (await getCommits(fx.dir)).map((c) => c.subject)
+      const subjects = (await ok(getCommits(fx.dir))).map((c) => c.subject)
       expect(subjects).toContain('en otra')
     })
 
@@ -53,19 +63,27 @@ describe('gitService', () => {
       fx.commit('en main', { 'c.txt': 'c\n' })
       fx.git('merge', '--no-ff', '-m', 'merge rama', 'rama')
 
-      const merge = (await getCommits(fx.dir)).find((c) => c.subject === 'merge rama')
-      expect(merge!.parents).toHaveLength(2)
+      const m = (await ok(getCommits(fx.dir))).find((c) => c.subject === 'merge rama')
+      expect(m!.parents).toHaveLength(2)
     })
 
     it('respeta el limite', async () => {
       fx.commit('uno', { 'a.txt': '1' })
       fx.commit('dos', { 'a.txt': '2' })
       fx.commit('tres', { 'a.txt': '3' })
-      expect(await getCommits(fx.dir, 2)).toHaveLength(2)
+      expect(await ok(getCommits(fx.dir, 2))).toHaveLength(2)
     })
 
-    it('un repo recien creado (sin commits) da lista vacia, no revienta', async () => {
-      expect(await getCommits(fx.dir)).toEqual([])
+    it('un repo recien creado (sin commits) da lista vacia SIN marcar error', async () => {
+      const r = await getCommits(fx.dir)
+      expect(r.data).toEqual([])
+      expect(r.error).toBeNull()
+    })
+
+    it('una carpeta que no es repo devuelve el error, no una lista vacia muda', async () => {
+      const r = await getCommits(fx.dir + '-no-existe')
+      expect(r.data).toEqual([])
+      expect(r.error).not.toBeNull()
     })
   })
 
@@ -74,7 +92,7 @@ describe('gitService', () => {
       fx.commit('base', { 'a.txt': 'a\n' })
       fx.git('branch', 'otra')
 
-      const branches = await getBranches(fx.dir)
+      const branches = await ok(getBranches(fx.dir))
       const main = branches.find((b) => b.name === 'main')!
       const otra = branches.find((b) => b.name === 'otra')!
 
@@ -100,7 +118,7 @@ describe('gitService', () => {
         fx.commit('local uno', { 'b.txt': 'b\n' })
         fx.commit('local dos', { 'c.txt': 'c\n' })
 
-        const b = (await getBranches(fx.dir)).find((x) => x.name === 'main2')!
+        const b = (await ok(getBranches(fx.dir))).find((x) => x.name === 'main2')!
         expect(b.upstream).toBe('origin/main')
         expect(b.ahead).toBe(2)
         expect(b.behind).toBe(0)
@@ -123,7 +141,7 @@ describe('gitService', () => {
         origin.git('branch', '-D', 'temporal')
         fx.git('fetch', '-q', '--prune', 'origin')
 
-        const b = (await getBranches(fx.dir)).find((x) => x.name === 'temporal')!
+        const b = (await ok(getBranches(fx.dir))).find((x) => x.name === 'temporal')!
         expect(b.gone).toBe(true)
       } finally {
         origin.cleanup()
@@ -138,7 +156,7 @@ describe('gitService', () => {
       fx.git('remote', 'add', 'hub', 'https://example.com/dos.git')
       fx.git('remote', 'set-url', '--push', 'origin', 'https://example.com/push.git')
 
-      const remotes = await getRemotes(fx.dir)
+      const remotes = await ok(getRemotes(fx.dir))
       expect(remotes).toHaveLength(2)
       const origin = remotes.find((r) => r.name === 'origin')!
       expect(origin.fetchUrl).toBe('https://example.com/uno.git')
@@ -147,7 +165,7 @@ describe('gitService', () => {
 
     it('sin remotos devuelve lista vacia', async () => {
       fx.commit('base', { 'a.txt': 'a\n' })
-      expect(await getRemotes(fx.dir)).toEqual([])
+      expect(await ok(getRemotes(fx.dir))).toEqual([])
     })
   })
 
@@ -159,7 +177,7 @@ describe('gitService', () => {
       fx.git('rm', '-q', 'viejo.txt')
       const sha = fx.commit('feat: varios cambios')
 
-      const d = await getCommitDetail(fx.dir, sha)
+      const d = (await ok(getCommitDetail(fx.dir, sha)))!
       expect(d.subject).toBe('feat: varios cambios')
       expect(d.author).toBe('Test User')
 
@@ -168,6 +186,85 @@ describe('gitService', () => {
       expect(byPath['nuevo.txt']).toBe('A')
       expect(byPath['viejo.txt']).toBe('D')
       expect(d.diff).toContain('a modificada')
+    })
+
+    it('un commit de MERGE lista sus archivos (--cc), no "Archivos (0)"', async () => {
+      fx.commit('base', { 'a.txt': 'a\n' })
+      fx.git('switch', '-qc', 'rama')
+      // mismo archivo tocado en ambos lados para que el diff combinado lo emita
+      fx.commit('en rama', { 'a.txt': 'a\nrama\n' })
+      fx.git('switch', '-q', 'main')
+      fx.commit('en main', { 'a.txt': 'main\na\n' })
+      fx.git('merge', '--no-ff', 'rama')
+      const sha = fx.git('rev-parse', 'HEAD').trim()
+
+      const d = (await ok(getCommitDetail(fx.dir, sha)))!
+      expect(d.parents).toHaveLength(2)
+      expect(d.files.map((f) => f.path)).toContain('a.txt')
+    })
+
+    it('un hash invalido devuelve error explicito, no un detalle fantasma', async () => {
+      fx.commit('base', { 'a.txt': 'a\n' })
+      const r = await getCommitDetail(fx.dir, 'ffffffffffffffffffffffffffffffffffffffff')
+      expect(r.data).toBeNull()
+      expect(r.error).not.toBeNull()
+    })
+  })
+
+  describe('merge (opciones)', () => {
+    it('--squash trae los cambios sin crear commit de merge', async () => {
+      fx.commit('base', { 'a.txt': 'a\n' })
+      fx.git('switch', '-qc', 'rama')
+      fx.commit('en rama', { 'b.txt': 'b\n' })
+      fx.git('switch', '-q', 'main')
+      fx.commit('en main', { 'c.txt': 'c\n' })
+
+      const res = await merge(fx.dir, 'rama', { squash: true })
+      expect(res.ok).toBe(true)
+      // el archivo quedo preparado pero NO hay commit de merge
+      const staged = fx.git('diff', '--cached', '--name-only')
+      expect(staged).toContain('b.txt')
+      const last = fx.git('log', '-1', '--pretty=%s')
+      expect(last.trim()).toBe('en main')
+    })
+
+    it('--ff-only falla limpio si las ramas divergieron', async () => {
+      fx.commit('base', { 'a.txt': 'a\n' })
+      fx.git('switch', '-qc', 'rama')
+      fx.commit('en rama', { 'b.txt': 'b\n' })
+      fx.git('switch', '-q', 'main')
+      fx.commit('en main', { 'c.txt': 'c\n' })
+
+      const res = await merge(fx.dir, 'rama', { ffOnly: true })
+      expect(res.ok).toBe(false)
+      // no dejo un merge a medias
+      const last = fx.git('log', '-1', '--pretty=%s')
+      expect(last.trim()).toBe('en main')
+    })
+  })
+
+  describe('diffRange', () => {
+    it('compara dos revisiones cualquiera', async () => {
+      fx.commit('base', { 'a.txt': 'a\n' })
+      fx.git('switch', '-qc', 'rama')
+      fx.commit('en rama', { 'b.txt': 'b\n' })
+
+      const res = await diffRange(fx.dir, 'main', 'rama')
+      expect(res.ok).toBe(true)
+      expect(res.stdout).toContain('b.txt')
+    })
+
+    it('con tres puntos compara contra la base comun', async () => {
+      fx.commit('base', { 'a.txt': 'a\n' })
+      fx.git('switch', '-qc', 'rama')
+      fx.commit('en rama', { 'b.txt': 'b\n' })
+      fx.git('switch', '-q', 'main')
+      fx.commit('en main', { 'c.txt': 'c\n' })
+
+      const res = await diffRange(fx.dir, 'main', 'rama', true)
+      expect(res.ok).toBe(true)
+      expect(res.stdout).toContain('b.txt')
+      expect(res.stdout).not.toContain('c.txt')
     })
   })
 
@@ -230,45 +327,52 @@ describe('gitService', () => {
     })
 
     it('busca por mensaje sin distinguir mayusculas', async () => {
-      const r = await searchCommits(fx.dir, 'message', 'CORREGIR')
+      const r = await ok(searchCommits(fx.dir, 'message', 'CORREGIR'))
       expect(r.map((c) => c.subject)).toEqual(['fix: corregir despedida'])
     })
 
     it('busca por autor', async () => {
-      const r = await searchCommits(fx.dir, 'author', 'ana')
+      const r = await ok(searchCommits(fx.dir, 'author', 'ana'))
       expect(r.map((c) => c.subject)).toEqual(['feat: agregar saludo'])
     })
 
     it('busca por contenido con el pickaxe', async () => {
-      const r = await searchCommits(fx.dir, 'content', 'hola')
+      const r = await ok(searchCommits(fx.dir, 'content', 'hola'))
       expect(r.map((c) => c.subject)).toEqual(['feat: agregar saludo'])
     })
 
+    it('busca por regex sobre lineas cambiadas (-G)', async () => {
+      const r = await ok(searchCommits(fx.dir, 'regex', 'adio.'))
+      expect(r.map((c) => c.subject)).toEqual(['fix: corregir despedida'])
+    })
+
     it('busca por ruta de archivo', async () => {
-      const r = await searchCommits(fx.dir, 'file', 'helper')
+      const r = await ok(searchCommits(fx.dir, 'file', 'helper'))
       expect(r.map((c) => c.subject)).toEqual(['chore: helper'])
     })
 
     it('busca por revision', async () => {
-      const r = await searchCommits(fx.dir, 'hash', 'HEAD~1')
+      const r = await ok(searchCommits(fx.dir, 'hash', 'HEAD~1'))
       expect(r).toHaveLength(1)
       expect(r[0].subject).toBe('fix: corregir despedida')
     })
 
-    it('una revision inexistente da lista vacia en vez de reventar', async () => {
-      expect(await searchCommits(fx.dir, 'hash', 'no-existe-jamas')).toEqual([])
+    it('una revision inexistente reporta el error de git', async () => {
+      const r = await searchCommits(fx.dir, 'hash', 'no-existe-jamas')
+      expect(r.data).toEqual([])
+      expect(r.error).not.toBeNull()
     })
 
     it('texto vacio no busca nada', async () => {
-      expect(await searchCommits(fx.dir, 'message', '   ')).toEqual([])
+      expect(await ok(searchCommits(fx.dir, 'message', '   '))).toEqual([])
     })
 
     it('el texto del usuario no se interpreta como shell', async () => {
       // si esto se colara a una shell, el repo se romperia
-      const r = await searchCommits(fx.dir, 'message', '"; rm -rf . #')
+      const r = await ok(searchCommits(fx.dir, 'message', '"; rm -rf . #'))
       expect(r).toEqual([])
       // el repo sigue entero
-      expect(await getCommits(fx.dir)).toHaveLength(3)
+      expect(await ok(getCommits(fx.dir))).toHaveLength(3)
     })
   })
 })

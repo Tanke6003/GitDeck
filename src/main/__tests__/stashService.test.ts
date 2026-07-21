@@ -16,7 +16,7 @@ describe('stashService', () => {
     const res = await pushStash(fx.dir, 'mi trabajo a medias')
     expect(res.ok).toBe(true)
 
-    const [s] = await listStashes(fx.dir)
+    const [s] = (await listStashes(fx.dir)).data
     expect(s.ref).toBe('stash@{0}')
     expect(s.index).toBe(0)
     expect(s.branch).toBe('main')
@@ -31,7 +31,7 @@ describe('stashService', () => {
     fx.write('f.txt', 'v2\n')
     await pushStash(fx.dir)
 
-    const [s] = await listStashes(fx.dir)
+    const [s] = (await listStashes(fx.dir)).data
     // git escribe "WIP on main: <sha> base": ni el sha ni el prefijo son el mensaje
     expect(s.message).toBe('base')
     expect(s.branch).toBe('main')
@@ -43,7 +43,7 @@ describe('stashService', () => {
     fx.write('f.txt', 'v3\n')
     await pushStash(fx.dir, 'segundo')
 
-    const list = await listStashes(fx.dir)
+    const list = (await listStashes(fx.dir)).data
     expect(list.map((s) => s.message)).toEqual(['segundo', 'primero'])
     expect(list.map((s) => s.ref)).toEqual(['stash@{0}', 'stash@{1}'])
     expect(list.map((s) => s.index)).toEqual([0, 1])
@@ -55,7 +55,7 @@ describe('stashService', () => {
 
     // el archivo desaparece del working tree porque se lo llevo el stash
     expect(fx.git('status', '--porcelain').trim()).toBe('')
-    const [s] = await listStashes(fx.dir)
+    const [s] = (await listStashes(fx.dir)).data
     expect(s.message).toBe('con untracked')
   })
 
@@ -65,14 +65,14 @@ describe('stashService', () => {
 
     const ap = await applyStash(fx.dir, 'stash@{0}')
     expect(ap.ok).toBe(true)
-    expect(await listStashes(fx.dir)).toHaveLength(1)
+    expect((await listStashes(fx.dir)).data).toHaveLength(1)
     expect(fx.git('show', 'HEAD:f.txt')).toContain('v1')
 
     // limpiar el working tree antes del pop (si no, choca)
     fx.git('checkout', '--', 'f.txt')
     const po = await popStash(fx.dir, 'stash@{0}')
     expect(po.ok).toBe(true)
-    expect(await listStashes(fx.dir)).toHaveLength(0)
+    expect((await listStashes(fx.dir)).data).toHaveLength(0)
   })
 
   it('drop descarta sin aplicar', async () => {
@@ -81,7 +81,7 @@ describe('stashService', () => {
 
     const res = await dropStash(fx.dir, 'stash@{0}')
     expect(res.ok).toBe(true)
-    expect(await listStashes(fx.dir)).toHaveLength(0)
+    expect((await listStashes(fx.dir)).data).toHaveLength(0)
     // no se aplico: el archivo sigue como en el commit
     expect(fx.git('status', '--porcelain').trim()).toBe('')
   })
@@ -97,18 +97,18 @@ describe('stashService', () => {
 
   it('sin cambios que guardar no crea stash', async () => {
     await pushStash(fx.dir, 'nada')
-    expect(await listStashes(fx.dir)).toHaveLength(0)
+    expect((await listStashes(fx.dir)).data).toHaveLength(0)
   })
 
   it('sin stashes devuelve lista vacia', async () => {
-    expect(await listStashes(fx.dir)).toEqual([])
+    expect((await listStashes(fx.dir)).data).toEqual([])
   })
 
   it('un mensaje con dos puntos no se parte mal', async () => {
     fx.write('f.txt', 'v2\n')
     await pushStash(fx.dir, 'fix: algo roto: en serio')
 
-    const [s] = await listStashes(fx.dir)
+    const [s] = (await listStashes(fx.dir)).data
     expect(s.message).toBe('fix: algo roto: en serio')
     expect(s.branch).toBe('main')
   })

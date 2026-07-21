@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Fixture } from './fixture'
-import { abortOp, cherryPick, continueOp, getRepoState, merge, rebase, revert } from '../mergeService'
+import { abortOp, cherryPick, continueOp, getRepoState, rebase, reset, revert } from '../mergeService'
+import { merge } from '../gitService'
 
 /** deja main y `otra` tocando la MISMA linea, para forzar conflicto */
 function divergir(fx: Fixture): string {
@@ -64,6 +65,39 @@ describe('mergeService', () => {
 
       const st = await getRepoState(fx.dir)
       expect(st.op).toBe('revert')
+    })
+  })
+
+  describe('reset', () => {
+    it('--soft mueve HEAD y deja el cambio preparado', async () => {
+      fx.commit('uno', { 'a.txt': '1\n' })
+      fx.commit('dos', { 'a.txt': '2\n' })
+
+      const res = await reset(fx.dir, 'soft', 'HEAD~1')
+      expect(res.ok).toBe(true)
+      expect(fx.git('log', '-1', '--pretty=%s').trim()).toBe('uno')
+      // el contenido de "dos" quedo en el staging
+      expect(fx.git('diff', '--cached', '--name-only')).toContain('a.txt')
+    })
+
+    it('--mixed deja el cambio sin preparar', async () => {
+      fx.commit('uno', { 'a.txt': '1\n' })
+      fx.commit('dos', { 'a.txt': '2\n' })
+
+      const res = await reset(fx.dir, 'mixed', 'HEAD~1')
+      expect(res.ok).toBe(true)
+      expect(fx.git('diff', '--cached', '--name-only').trim()).toBe('')
+      expect(fx.git('diff', '--name-only')).toContain('a.txt')
+    })
+
+    it('--hard descarta el working tree', async () => {
+      fx.commit('uno', { 'a.txt': '1\n' })
+      fx.commit('dos', { 'a.txt': '2\n' })
+
+      const res = await reset(fx.dir, 'hard', 'HEAD~1')
+      expect(res.ok).toBe(true)
+      expect(fx.git('status', '--porcelain').trim()).toBe('')
+      expect(fx.git('show', 'HEAD:a.txt')).toBe('1\n')
     })
   })
 

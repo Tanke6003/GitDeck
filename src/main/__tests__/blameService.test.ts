@@ -17,7 +17,7 @@ describe('blameService', () => {
       fx.as('Bob Ruiz', 'bob@x.com')
       fx.commit('segundo', { 'f.txt': 'uno\ndos CAMBIADA\ntres\n' })
 
-      const lines = await getBlame(fx.dir, 'f.txt')
+      const lines = (await getBlame(fx.dir, 'f.txt')).data
       expect(lines).toHaveLength(3)
 
       expect(lines[0].content).toBe('uno')
@@ -41,10 +41,10 @@ describe('blameService', () => {
       const primero = fx.commit('primero', { 'f.txt': 'uno\ndos\n' })
       fx.commit('segundo', { 'f.txt': 'uno\ndos\ntres\n' })
 
-      const enPrimero = await getBlame(fx.dir, 'f.txt', primero)
+      const enPrimero = (await getBlame(fx.dir, 'f.txt', primero)).data
       expect(enPrimero).toHaveLength(2) // "tres" aun no existia
 
-      const enHead = await getBlame(fx.dir, 'f.txt')
+      const enHead = (await getBlame(fx.dir, 'f.txt')).data
       expect(enHead).toHaveLength(3)
     })
 
@@ -52,7 +52,7 @@ describe('blameService', () => {
       fx.as('Ana Lopez', 'ana@x.com')
       fx.commit('primero', { 'f.txt': 'uno\n' })
 
-      const [l] = await getBlame(fx.dir, 'f.txt')
+      const [l] = (await getBlame(fx.dir, 'f.txt')).data
       // si el parser cazara "author-mail" primero, aqui saldria "<ana@x.com>"
       expect(l.author).toBe('Ana Lopez')
     })
@@ -60,7 +60,7 @@ describe('blameService', () => {
     it('una linea que empieza por @@ no se confunde con una cabecera', async () => {
       fx.commit('raro', { 'f.txt': '@@ -1,5 +1,5 @@ esto es contenido\nnormal\n' })
 
-      const lines = await getBlame(fx.dir, 'f.txt')
+      const lines = (await getBlame(fx.dir, 'f.txt')).data
       expect(lines).toHaveLength(2)
       expect(lines[0].content).toBe('@@ -1,5 +1,5 @@ esto es contenido')
     })
@@ -68,14 +68,16 @@ describe('blameService', () => {
     it('conserva la indentacion de las lineas', async () => {
       fx.commit('indentado', { 'f.txt': 'sin\n    con cuatro\n\tcon tab\n' })
 
-      const lines = await getBlame(fx.dir, 'f.txt')
+      const lines = (await getBlame(fx.dir, 'f.txt')).data
       expect(lines[1].content).toBe('    con cuatro')
       expect(lines[2].content).toBe('\tcon tab')
     })
 
-    it('un archivo inexistente da lista vacia en vez de reventar', async () => {
+    it('un archivo inexistente reporta el error de git, no una lista vacia muda', async () => {
       fx.commit('base', { 'f.txt': 'x\n' })
-      expect(await getBlame(fx.dir, 'no-existe.txt')).toEqual([])
+      const r = await getBlame(fx.dir, 'no-existe.txt')
+      expect(r.data).toEqual([])
+      expect(r.error).not.toBeNull()
     })
   })
 
@@ -84,7 +86,7 @@ describe('blameService', () => {
       fx.commit('primero', { 'a.txt': 'a\n' })
       fx.commit('segundo', { 'b.txt': 'b\n' })
 
-      const log = await getReflog(fx.dir)
+      const log = (await getReflog(fx.dir)).data
       expect(log.length).toBeGreaterThanOrEqual(2)
       expect(log[0].ref).toBe('HEAD@{0}')
       expect(log[0].subject).toBe('segundo')
@@ -98,7 +100,7 @@ describe('blameService', () => {
       const perdido = fx.commit('se va a perder', { 'b.txt': 'b\n' })
       fx.git('reset', '--hard', '-q', 'HEAD~1')
 
-      const log = await getReflog(fx.dir)
+      const log = (await getReflog(fx.dir)).data
       expect(log[0].action).toContain('reset')
 
       // esto es lo que hace util al reflog: HEAD@{1} recupera el commit
@@ -113,7 +115,7 @@ describe('blameService', () => {
       fx.commit('uno', { 'a.txt': '1' })
       fx.commit('dos', { 'a.txt': '2' })
       fx.commit('tres', { 'a.txt': '3' })
-      expect(await getReflog(fx.dir, 2)).toHaveLength(2)
+      expect((await getReflog(fx.dir, 2)).data).toHaveLength(2)
     })
   })
 })
