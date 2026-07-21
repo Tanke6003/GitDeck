@@ -1,14 +1,16 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn } from 'child_process'
+import type { ChildProcess } from 'child_process'
 import { runGit } from './gitRunner'
 import { loadFavorites, saveFavorites } from './aliasStore'
-import type { AliasInfo, GitResult } from '@shared/types'
+import { readErr, readOk } from '@shared/types'
+import type { AliasInfo, GitResult, ReadResult } from '@shared/types'
 
 /**
  * Lee todos los alias efectivos en el repo (global + local) junto con su
  * descripcion opcional `desc.<name>` — igual que el alias `alias` del usuario.
  * Los favoritos (userData/favorites.json) vienen ya marcados en cada alias.
  */
-export async function getAliases(repo: string): Promise<AliasInfo[]> {
+export async function getAliases(repo: string): Promise<ReadResult<AliasInfo[]>> {
   const [aliasRes, descRes, favorites] = await Promise.all([
     runGit(['config', '--get-regexp', '^alias\\.'], repo),
     runGit(['config', '--get-regexp', '^desc\\.'], repo),
@@ -27,7 +29,11 @@ export async function getAliases(repo: string): Promise<AliasInfo[]> {
     }
   }
 
-  if (!aliasRes.ok) return []
+  // `config --get-regexp` sale con 1 cuando NO hay coincidencias: eso es
+  // "sin alias", no un error. Otros codigos si son fallo real.
+  if (!aliasRes.ok) {
+    return aliasRes.code === 1 && !aliasRes.stderr.trim() ? readOk([]) : readErr([], aliasRes)
+  }
   const out: AliasInfo[] = []
   for (const line of aliasRes.stdout.split('\n')) {
     if (!line.trim()) continue
@@ -43,7 +49,7 @@ export async function getAliases(repo: string): Promise<AliasInfo[]> {
       favorite: favSet.has(name)
     })
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name))
+  return readOk(out.sort((a, b) => a.name.localeCompare(b.name)))
 }
 
 /** Proceso de alias en curso (solo se corre uno a la vez desde la UI). */
@@ -56,6 +62,17 @@ let currentAlias: ChildProcess | null = null
  */
 export function runAlias(repo: string, name: string): Promise<GitResult> {
   const cmd = `git ${name}`
+  // el "solo uno a la vez" se impone AQUI: si dependiera solo del renderer, dos
+  // alias:run seguidos dejarian el primer proceso huerfano e imposible de detener
+  if (currentAlias) {
+    return Promise.resolve({
+      ok: false,
+      cmd,
+      stdout: '',
+      stderr: 'ya hay un alias en ejecucion; detenlo o espera a que termine',
+      code: 1
+    })
+  }
   return new Promise((resolve) => {
     const child = spawn('git', ['-c', 'color.ui=always', name], {
       cwd: repo,

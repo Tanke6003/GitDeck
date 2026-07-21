@@ -1,13 +1,15 @@
 import { runGit, runGitStdin } from './gitRunner'
-import type { FileStatus, GitResult } from '@shared/types'
+import { readErr, readOk } from '@shared/types'
+import type { FileStatus, GitResult, ReadResult } from '@shared/types'
 
 /** Lee el estado de archivos (staged / sin preparar / untracked). */
-export async function getStatus(repo: string): Promise<FileStatus[]> {
+export async function getStatus(repo: string): Promise<ReadResult<FileStatus[]>> {
   const res = await runGit(
     ['-c', 'core.quotePath=false', 'status', '--porcelain=v1', '--untracked-files=all'],
     repo
   )
-  if (!res.ok) return []
+  // si el status falla, la UI NO debe mostrar "sin cambios" como si estuviera limpio
+  if (!res.ok) return readErr([], res)
   const out: FileStatus[] = []
   for (const line of res.stdout.split('\n')) {
     if (!line) continue
@@ -29,8 +31,30 @@ export async function getStatus(repo: string): Promise<FileStatus[]> {
       conflicted
     })
   }
-  return out
+  return readOk(out)
 }
+
+/**
+ * Descarta los cambios de UN archivo. Destructivo: la UI confirma antes.
+ * - trackeado: `git restore` vuelve al contenido del index/HEAD
+ * - untracked: git no tiene version anterior; borrar el archivo es `clean -f`
+ */
+export function discardFile(repo: string, path: string, untracked = false): Promise<GitResult> {
+  return untracked
+    ? runGit(['clean', '-f', '--', path], repo)
+    : runGit(['restore', '--', path], repo)
+}
+
+/**
+ * Dry-run de `git clean`: lista lo que se borraria SIN tocar nada.
+ * La UI muestra esta lista antes de confirmar el clean real.
+ */
+export const cleanPreview = (repo: string, includeIgnored = false): Promise<GitResult> =>
+  runGit(['clean', '-nd', ...(includeIgnored ? ['-x'] : [])], repo)
+
+/** Borra untracked (y con includeIgnored tambien los ignorados). Destructivo. */
+export const clean = (repo: string, includeIgnored = false): Promise<GitResult> =>
+  runGit(['clean', '-fd', ...(includeIgnored ? ['-x'] : [])], repo)
 
 export const stageFile = (repo: string, path: string): Promise<GitResult> =>
   runGit(['add', '--', path], repo)

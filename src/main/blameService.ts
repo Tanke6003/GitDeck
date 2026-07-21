@@ -1,8 +1,7 @@
 import { runGit } from './gitRunner'
-import type { BlameLine, ReflogEntry } from '@shared/types'
-
-/** separador de campos poco probable en el contenido (unit separator) */
-const SEP = '\x1f'
+import { SEP } from './gitFormat'
+import { readErr, readOk } from '@shared/types'
+import type { BlameLine, ReadResult, ReflogEntry } from '@shared/types'
 
 /** cabecera de bloque del porcelain: "<sha40> <lineaOrig> <lineaFinal> [<n>]" */
 const HEADER = /^([0-9a-f]{40}) \d+ (\d+)/
@@ -17,13 +16,17 @@ const HEADER = /^([0-9a-f]{40}) \d+ (\d+)/
  *
  * @param rev revision opcional: blame del archivo tal como estaba en ese commit.
  */
-export async function getBlame(repo: string, path: string, rev?: string): Promise<BlameLine[]> {
+export async function getBlame(
+  repo: string,
+  path: string,
+  rev?: string
+): Promise<ReadResult<BlameLine[]>> {
   const args = ['blame', '--line-porcelain']
   if (rev && rev.trim()) args.push(rev.trim())
   args.push('--', path)
 
   const res = await runGit(args, repo)
-  if (!res.ok) return []
+  if (!res.ok) return readErr([], res)
 
   const out: BlameLine[] = []
   let cur: Partial<BlameLine> = {}
@@ -60,17 +63,17 @@ export async function getBlame(repo: string, path: string, rev?: string): Promis
       cur = {}
     }
   }
-  return out
+  return readOk(out)
 }
 
 /**
  * `git reflog`: por donde ha pasado HEAD. Sirve para recuperar commits que
  * quedaron sin rama (tras un reset, un rebase o un checkout).
  */
-export async function getReflog(repo: string, limit = 200): Promise<ReflogEntry[]> {
+export async function getReflog(repo: string, limit = 200): Promise<ReadResult<ReflogEntry[]>> {
   const fmt = ['%gd', '%h', '%gs', '%cr', '%s'].join(SEP)
   const res = await runGit(['reflog', `--max-count=${limit}`, `--format=${fmt}`], repo)
-  if (!res.ok) return []
+  if (!res.ok) return readErr([], res)
 
   const out: ReflogEntry[] = []
   for (const line of res.stdout.split('\n')) {
@@ -84,5 +87,5 @@ export async function getReflog(repo: string, limit = 200): Promise<ReflogEntry[
       subject: subject ?? ''
     })
   }
-  return out
+  return readOk(out)
 }

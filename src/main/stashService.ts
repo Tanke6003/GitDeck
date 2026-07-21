@@ -1,8 +1,7 @@
 import { runGit } from './gitRunner'
-import type { GitResult, StashEntry } from '@shared/types'
-
-/** separador de campos poco probable en el contenido (unit separator) */
-const SEP = '\x1f'
+import { SEP } from './gitFormat'
+import { readErr, readOk } from '@shared/types'
+import type { GitResult, ReadResult, StashEntry } from '@shared/types'
 
 /**
  * De la linea de asunto del reflog saca la rama donde se creo el stash.
@@ -27,10 +26,10 @@ function parseMessage(subject: string): string {
 }
 
 /** git stash list — pila de stashes, indice 0 = el mas reciente. */
-export async function listStashes(repo: string): Promise<StashEntry[]> {
+export async function listStashes(repo: string): Promise<ReadResult<StashEntry[]>> {
   const fmt = ['%gd', '%gs', '%cr'].join(SEP)
   const res = await runGit(['stash', 'list', `--format=${fmt}`], repo)
-  if (!res.ok) return []
+  if (!res.ok) return readErr([], res)
 
   const out: StashEntry[] = []
   for (const line of res.stdout.split('\n')) {
@@ -46,7 +45,7 @@ export async function listStashes(repo: string): Promise<StashEntry[]> {
       date: date ?? ''
     })
   }
-  return out
+  return readOk(out)
 }
 
 /**

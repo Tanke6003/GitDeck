@@ -1,17 +1,20 @@
 import { runGit } from './gitRunner'
+import { NET_TIMEOUT, SEP } from './gitFormat'
+import { readErr, readOk } from '@shared/types'
 import type {
   BranchInfo,
   Commit,
   CommitDetail,
   GitResult,
   IncomingCommit,
+  MergeOpts,
   MergePreview,
+  PullOpts,
+  PushOpts,
+  ReadResult,
   RemoteInfo,
   SearchMode
 } from '@shared/types'
-
-/** separador de campos poco probable en el contenido (unit separator) */
-const SEP = '\x1f'
 
 /** formato de una linea de log -> Commit */
 const LOG_FMT = ['%H', '%h', '%P', '%an', '%ae', '%at', '%D', '%s'].join(SEP)
@@ -42,12 +45,16 @@ function parseCommits(stdout: string): Commit[] {
 }
 
 /** Lee el log de TODAS las ramas (para el grafo). Newest-first, --date-order. */
-export async function getCommits(repo: string, limit = 400): Promise<Commit[]> {
+export async function getCommits(repo: string, limit = 400): Promise<ReadResult<Commit[]>> {
   const res = await runGit(
     ['log', '--all', '--date-order', `--max-count=${limit}`, `--pretty=format:${LOG_FMT}`],
     repo
   )
-  return res.ok ? parseCommits(res.stdout) : []
+  // un repo recien inicializado no tiene HEAD: eso es "sin commits", no un error
+  if (!res.ok && /does not have any commits yet|bad default revision/i.test(res.stderr)) {
+    return readOk([])
+  }
+  return res.ok ? readOk(parseCommits(res.stdout)) : readErr([], res)
 }
 
 /**
@@ -61,9 +68,9 @@ export async function searchCommits(
   mode: SearchMode,
   text: string,
   limit = 200
-): Promise<Commit[]> {
+): Promise<ReadResult<Commit[]>> {
   const t = text.trim()
-  if (!t) return []
+  if (!t) return readOk([])
 
   const base = ['log', `--max-count=${limit}`, `--pretty=format:${LOG_FMT}`]
   let args: string[]
@@ -78,6 +85,10 @@ export async function searchCommits(
       // pickaxe: commits donde cambio el numero de apariciones del texto
       args = [...base, '--all', `-S${t}`]
       break
+    case 'regex':
+      // -G: regex sobre las lineas agregadas/quitadas; encuentra cambios que -S no ve
+      args = [...base, '--all', `-G${t}`]
+      break
     case 'file':
       // pathspec con comodines: cualquier ruta que contenga el texto
       args = [...base, '--all', '--', `*${t}*`]
@@ -89,18 +100,31 @@ export async function searchCommits(
   }
 
   const res = await runGit(args, repo)
-  // una revision inexistente o un regex invalido salen por exit != 0: sin resultados
-  return res.ok ? parseCommits(res.stdout) : []
+  // una revision inexistente o un regex invalido salen por exit != 0: sin resultados,
+  // pero conservamos el error para que la UI pueda distinguirlo de "0 coincidencias"
+  return res.ok ? readOk(parseCommits(res.stdout)) : readErr([], res)
 }
 
-/** Detalle de un commit: metadatos, archivos cambiados y diff con color. */
-export async function getCommitDetail(repo: string, hash: string): Promise<CommitDetail> {
+/**
+ * Detalle de un commit: metadatos, archivos cambiados y diff con color.
+ *
+ * `--cc` en diff-tree: sin el, un commit de MERGE no emite ningun archivo
+ * (mientras `git show` si produce diff) y el drawer mostraba "Archivos (0)"
+ * con un diff visible debajo.
+ */
+export async function getCommitDetail(
+  repo: string,
+  hash: string
+): Promise<ReadResult<CommitDetail | null>> {
   const fmt = ['%H', '%h', '%P', '%an', '%ae', '%ad', '%at', '%s', '%b'].join(SEP)
   const [metaRes, filesRes, diffRes] = await Promise.all([
     runGit(['show', '-s', '--date=format:%Y-%m-%d %H:%M', `--format=${fmt}`, hash], repo),
-    runGit(['diff-tree', '--no-commit-id', '--name-status', '-r', '--root', hash], repo),
+    runGit(['diff-tree', '--cc', '--no-commit-id', '--name-status', '-r', '--root', hash], repo),
     runGit(['-c', 'color.ui=always', 'show', '--format=', '--patch', hash], repo)
   ])
+
+  // hash invalido u otro fallo: antes se devolvia un detalle "fantasma" con todo vacio
+  if (!metaRes.ok) return readErr(null, metaRes)
 
   const p = metaRes.stdout.split(SEP)
   const files = filesRes.stdout
@@ -111,7 +135,7 @@ export async function getCommitDetail(repo: string, hash: string): Promise<Commi
       return { status: cols[0], path: cols[cols.length - 1] }
     })
 
-  return {
+  return readOk({
     hash: p[0] ?? hash,
     short: p[1] ?? '',
     parents: p[2] ? p[2].split(' ').filter(Boolean) : [],
@@ -123,11 +147,11 @@ export async function getCommitDetail(repo: string, hash: string): Promise<Commi
     body: (p[8] ?? '').trim(),
     files,
     diff: diffRes.stdout
-  }
+  })
 }
 
 /** Lista ramas locales y remotas en una sola pasada. */
-export async function getBranches(repo: string): Promise<BranchInfo[]> {
+export async function getBranches(repo: string): Promise<ReadResult<BranchInfo[]>> {
   const fmt = [
     '%(refname)',
     '%(objectname:short)',
@@ -137,11 +161,8 @@ export async function getBranches(repo: string): Promise<BranchInfo[]> {
     '%(subject)',
     '%(upstream:track,nobracket)'
   ].join(SEP)
-  const res = await runGit(
-    ['for-each-ref', `--format=${fmt}`, 'refs/heads', 'refs/remotes'],
-    repo
-  )
-  if (!res.ok) return []
+  const res = await runGit(['for-each-ref', `--format=${fmt}`, 'refs/heads', 'refs/remotes'], repo)
+  if (!res.ok) return readErr([], res)
 
   const out: BranchInfo[] = []
   for (const line of res.stdout.split('\n')) {
@@ -167,16 +188,16 @@ export async function getBranches(repo: string): Promise<BranchInfo[]> {
       gone: t.includes('gone')
     })
   }
-  return out
+  return readOk(out)
 }
 
 /** Lista los remotos con sus URLs de fetch/push. */
-export async function getRemotes(repo: string): Promise<RemoteInfo[]> {
+export async function getRemotes(repo: string): Promise<ReadResult<RemoteInfo[]>> {
   const res = await runGit(['remote', '-v'], repo)
-  if (!res.ok) return []
+  if (!res.ok) return readErr([], res)
   const map = new Map<string, { fetch?: string; push?: string }>()
   for (const line of res.stdout.split('\n')) {
-    const m = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)/)
+    const m = /^(\S+)\s+(\S+)\s+\((fetch|push)\)/.exec(line)
     if (!m) continue
     const [, name, url, kind] = m
     const entry = map.get(name) ?? {}
@@ -184,36 +205,61 @@ export async function getRemotes(repo: string): Promise<RemoteInfo[]> {
     else entry.push = url
     map.set(name, entry)
   }
-  return [...map.entries()].map(([name, e]) => ({
-    name,
-    fetchUrl: e.fetch ?? '',
-    pushUrl: e.push ?? ''
-  }))
+  return readOk(
+    [...map.entries()].map(([name, e]) => ({
+      name,
+      fetchUrl: e.fetch ?? '',
+      pushUrl: e.push ?? ''
+    }))
+  )
+}
+
+/**
+ * Diff entre dos revisiones cualquiera (rama, tag, sha…), con color.
+ * - `revA..revB`  diferencia directa entre ambos arboles
+ * - `revA...revB` (threeDot) diferencia contra la base comun: "que aporto revB"
+ * - sin revB: working tree contra revA
+ */
+export function diffRange(
+  repo: string,
+  revA: string,
+  revB?: string,
+  threeDot = false
+): Promise<GitResult> {
+  const range = revB && revB.trim() ? `${revA}${threeDot ? '...' : '..'}${revB.trim()}` : revA
+  return runGit(['-c', 'color.ui=always', 'diff', range], repo)
 }
 
 // ---- acciones (devuelven GitResult para mostrar comando + salida) ----
-
-/** timeout amplio para operaciones de red (fetch/pull/push) */
-const NET_TIMEOUT = 180_000
 
 /** git fetch --all --prune */
 export function fetchAll(repo: string): Promise<GitResult> {
   return runGit(['fetch', '--all', '--prune'], repo, undefined, NET_TIMEOUT)
 }
 
-/** git pull en la rama actual (usa su upstream). */
-export function pull(repo: string): Promise<GitResult> {
-  return runGit(['pull'], repo, undefined, NET_TIMEOUT)
+/**
+ * git pull con estrategia opcional (--rebase / --ff-only) y remoto/rama
+ * concretos. Sin opciones es el pull de siempre (merge del upstream actual).
+ */
+export function pull(repo: string, opts?: PullOpts): Promise<GitResult> {
+  const args = ['pull']
+  if (opts?.rebase) args.push('--rebase')
+  if (opts?.ffOnly) args.push('--ff-only')
+  if (opts?.remote) {
+    args.push(opts.remote)
+    if (opts.branch) args.push(opts.branch)
+  }
+  return runGit(args, repo, undefined, NET_TIMEOUT)
 }
 
-/** git push; si setUpstream, publica la rama con -u remote branch. */
-export function push(
-  repo: string,
-  opts?: { setUpstream?: boolean; remote?: string; branch?: string }
-): Promise<GitResult> {
-  const args = opts?.setUpstream
-    ? ['push', '-u', opts.remote ?? 'origin', opts.branch ?? 'HEAD']
-    : ['push']
+/**
+ * git push. Con setUpstream publica la rama (-u remote branch). Con
+ * forceWithLease hace el push forzado SEGURO que hace falta tras amend/rebase.
+ */
+export function push(repo: string, opts?: PushOpts): Promise<GitResult> {
+  const args = ['push']
+  if (opts?.forceWithLease) args.push('--force-with-lease')
+  if (opts?.setUpstream) args.push('-u', opts.remote ?? 'origin', opts.branch ?? 'HEAD')
   return runGit(args, repo, undefined, NET_TIMEOUT)
 }
 
@@ -251,10 +297,7 @@ export function checkoutBranch(repo: string, name: string): Promise<GitResult> {
  * "already exists"); si no, `switch --track origin/foo` la crea con upstream
  * explicito en vez de depender del DWIM de git.
  */
-export async function checkoutRemoteBranch(
-  repo: string,
-  remoteBranch: string
-): Promise<GitResult> {
+export async function checkoutRemoteBranch(repo: string, remoteBranch: string): Promise<GitResult> {
   const local = remoteBranch.split('/').slice(1).join('/')
   if (!local) return runGit(['switch', remoteBranch], repo)
   const exists = await runGit(['rev-parse', '--verify', '--quiet', `refs/heads/${local}`], repo)
@@ -272,12 +315,24 @@ export const deleteRemoteBranch = (
   repo: string,
   remote: string,
   branch: string
-): Promise<GitResult> =>
-  runGit(['push', remote, '--delete', branch], repo, undefined, NET_TIMEOUT)
+): Promise<GitResult> => runGit(['push', remote, '--delete', branch], repo, undefined, NET_TIMEOUT)
 
 /** Renombra una rama local (git branch -m viejo nuevo). */
 export const renameBranch = (repo: string, oldName: string, newName: string): Promise<GitResult> =>
   runGit(['branch', '-m', oldName, newName], repo)
+
+/**
+ * Fusiona una rama en la actual con opciones de politica de integracion.
+ * Conflictos => exit != 0 y queda MERGE_HEAD.
+ */
+export function merge(repo: string, branch: string, opts?: MergeOpts): Promise<GitResult> {
+  const args = ['merge']
+  if (opts?.noFF) args.push('--no-ff')
+  if (opts?.ffOnly) args.push('--ff-only')
+  if (opts?.squash) args.push('--squash')
+  args.push(branch)
+  return runGit(args, repo)
+}
 
 /**
  * Vista previa de un merge: commits y archivos que entrarian al fusionar

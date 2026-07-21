@@ -1,8 +1,7 @@
 import { runGit, runGitStdin } from './gitRunner'
-import type { GitResult, TagInfo } from '@shared/types'
-
-/** separador de campos poco probable en el contenido (unit separator) */
-const SEP = '\x1f'
+import { NET_TIMEOUT, SEP } from './gitFormat'
+import { readErr, readOk } from '@shared/types'
+import type { GitResult, ReadResult, TagInfo } from '@shared/types'
 
 /**
  * Lista los tags con su commit y, si es anotado, su mensaje y fecha.
@@ -12,7 +11,7 @@ const SEP = '\x1f'
  * los datos del commit apuntado cuando el tag es anotado, y quedan vacios cuando es
  * ligero — ahi sirven `objectname`/`subject` a secas.
  */
-export async function listTags(repo: string): Promise<TagInfo[]> {
+export async function listTags(repo: string): Promise<ReadResult<TagInfo[]>> {
   const fmt = [
     '%(refname:short)',
     '%(objecttype)',
@@ -30,7 +29,7 @@ export async function listTags(repo: string): Promise<TagInfo[]> {
     ['for-each-ref', `--format=${fmt}`, '--sort=-refname', '--sort=-creatordate', 'refs/tags'],
     repo
   )
-  if (!res.ok) return []
+  if (!res.ok) return readErr([], res)
 
   const out: TagInfo[] = []
   for (const line of res.stdout.split('\n')) {
@@ -46,7 +45,7 @@ export async function listTags(repo: string): Promise<TagInfo[]> {
       date: (annotated ? annDate : liteDate) || ''
     })
   }
-  return out
+  return readOk(out)
 }
 
 /**
@@ -70,9 +69,6 @@ export function createTag(
 /** Borra un tag local. */
 export const deleteTag = (repo: string, name: string): Promise<GitResult> =>
   runGit(['tag', '-d', name], repo)
-
-/** timeout amplio: toca la red */
-const NET_TIMEOUT = 180_000
 
 /** Borra un tag en el remoto. */
 export const deleteRemoteTag = (repo: string, remote: string, name: string): Promise<GitResult> =>

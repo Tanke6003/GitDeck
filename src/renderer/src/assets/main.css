@@ -18,6 +18,7 @@
   --sidebar: #181825;
   --code-bg: #11111b;
   --input-bg: #11111b;
+  --graph-bg: #16161f;
   --text: #cdd6f4;
   --text-dim: #9399b2;
   --accent: #89b4fa;
@@ -26,7 +27,19 @@
   --danger: #f38ba8;
   --border: #313244;
   --on-accent: #11111b;
+  --teal: #94e2d5;
+  --mauve: #cba6f7;
   --mono: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+
+  /* carriles del grafo (y paleta del blame): por tema, no hex fijos en el TS */
+  --lane-0: #89b4fa;
+  --lane-1: #a6e3a1;
+  --lane-2: #f9e2af;
+  --lane-3: #f38ba8;
+  --lane-4: #cba6f7;
+  --lane-5: #94e2d5;
+  --lane-6: #fab387;
+  --lane-7: #74c7ec;
 
   /* ansi: negro, rojo, verde, amarillo, azul, magenta, cian, blanco */
   --ansi-0: #45475a;
@@ -56,6 +69,7 @@
   --sidebar: #dce0e8;
   --code-bg: #e6e9ef;
   --input-bg: #ffffff;
+  --graph-bg: #dce0e8;
   --text: #4c4f69;
   --text-dim: #6c6f85;
   --accent: #1e66f5;
@@ -64,6 +78,17 @@
   --danger: #d20f39;
   --border: #bcc0cc;
   --on-accent: #ffffff;
+  --teal: #179299;
+  --mauve: #8839ef;
+
+  --lane-0: #1e66f5;
+  --lane-1: #40a02b;
+  --lane-2: #df8e1d;
+  --lane-3: #d20f39;
+  --lane-4: #8839ef;
+  --lane-5: #179299;
+  --lane-6: #fe640b;
+  --lane-7: #04a5e5;
 
   --ansi-0: #5c5f77;
   --ansi-1: #d20f39;
@@ -251,14 +276,17 @@ button.link:hover:not(:disabled) {
   text-decoration: line-through;
 }
 
+/* forma ademas de color: limpio = anillo, sucio = relleno (daltonismo) */
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   flex: 0 0 auto;
+  box-sizing: border-box;
 }
 .dot.clean {
-  background: var(--ok);
+  background: transparent;
+  border: 2px solid var(--ok);
 }
 .dot.dirty {
   background: var(--warn);
@@ -486,7 +514,7 @@ button.link:hover:not(:disabled) {
 .graph-scroll {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #16161f;
+  background: var(--graph-bg);
   overflow: auto;
   max-height: calc(100vh - 220px);
 }
@@ -568,7 +596,7 @@ button.link:hover:not(:disabled) {
 }
 .ref-chip.remote {
   background: rgba(148, 226, 213, 0.14);
-  color: #94e2d5;
+  color: var(--teal);
 }
 .ref-chip.tag {
   background: rgba(249, 226, 175, 0.16);
@@ -609,7 +637,7 @@ button.link:hover:not(:disabled) {
   color: var(--ok);
 }
 .branch-row.remote .b-mark {
-  color: #94e2d5;
+  color: var(--teal);
 }
 .b-mark {
   color: var(--text-dim);
@@ -963,7 +991,7 @@ button.link:hover:not(:disabled) {
 .cd-merge {
   font-size: 10px;
   background: rgba(203, 166, 247, 0.16);
-  color: #cba6f7;
+  color: var(--mauve);
   padding: 1px 7px;
   border-radius: 8px;
 }
@@ -1038,7 +1066,7 @@ button.link:hover:not(:disabled) {
   color: var(--warn);
 }
 .cd-fstat.st-ren {
-  color: #94e2d5;
+  color: var(--teal);
 }
 .cd-fpath {
   font-family: var(--mono);
@@ -1093,18 +1121,20 @@ button.link:hover:not(:disabled) {
   vertical-align: middle;
 }
 
-/* ---- acciones de rama (merge/rebase) ---- */
+/* ---- acciones de rama (merge/rebase) ----
+   visibles al hover Y al foco de teclado (focus-within); nunca solo-hover */
 .b-actions {
   display: none;
   gap: 4px;
   flex: 0 0 auto;
 }
-.branch-row:hover .b-actions {
+.branch-row:hover .b-actions,
+.branch-row:focus-within .b-actions {
   display: flex;
 }
 .b-actions button {
-  font-size: 10px;
-  padding: 1px 7px;
+  font-size: 11px;
+  padding: 3px 8px;
   border-radius: 5px;
 }
 .b-actions button:hover:not(:disabled) {
@@ -1490,10 +1520,10 @@ button.link:hover:not(:disabled) {
   color: var(--text);
   margin: 6px 0 6px;
 }
+/* sin opacity extra: text-dim ya es atenuado y con opacity bajaba de AA */
 .alias-desc.none {
   color: var(--text-dim);
   font-style: italic;
-  opacity: 0.7;
 }
 .alias-cmd {
   display: block;
@@ -2211,4 +2241,326 @@ button.link:hover:not(:disabled) {
 }
 .open-err button {
   margin-left: auto;
+}
+
+/* ================= accesibilidad y componentes nuevos ================= */
+
+/* Foco de teclado SIEMPRE visible (antes no habia ningun :focus-visible) */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+/* Filas interactivas que ahora son <button> de verdad (operables por teclado):
+   se les quita el estilo de boton y conservan el aspecto de fila */
+button.repo-item,
+button.commit-row,
+button.s-row,
+button.st-msg,
+button.file-main,
+button.b-main {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+}
+.repo-nav {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.repo-list > li {
+  display: block;
+}
+button.repo-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+button.commit-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.s-list > li {
+  display: block;
+}
+button.s-row {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+button.st-msg {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.file-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+button.b-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+button.b-main:disabled {
+  cursor: default;
+  opacity: 1; /* la rama actual no esta "deshabilitada" visualmente */
+}
+.branch-row {
+  cursor: default;
+}
+.pane-title {
+  font-weight: 400; /* tambien cuando es <h2> */
+}
+
+/* errores de lectura (antes se tragaban y parecia "sin datos") */
+.pane-error {
+  border: 1px solid var(--danger);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: rgba(243, 139, 168, 0.08);
+  color: var(--danger);
+  font-size: 12px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.pane-error pre {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow: auto;
+}
+.pane-error.big {
+  font-size: 13px;
+}
+.bl-empty.err,
+.cd-loading.err,
+.hk-empty.err {
+  color: var(--danger);
+}
+.bl-empty.err pre,
+.cd-loading.err pre,
+.hk-empty.err pre {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.s-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.s-error pre {
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* spinner pequeño dentro de botones (progreso localizado) */
+.spinner.sm {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+/* pull con estrategia */
+.pull-group {
+  display: inline-flex;
+  align-items: stretch;
+}
+.pull-group > button {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+.pull-mode {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  font-size: 11px;
+  font-family: var(--mono);
+  max-width: 92px;
+}
+
+/* boton de push forzado en el panel de resultado */
+.force-push {
+  font-size: 12px;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* cargar mas commits */
+.graph-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* toggles del sidebar (idioma + tema) */
+.sidebar-toggles {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.lang-toggle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* estrategias de merge / modos de reset (radiogrupo con descripcion) */
+.mp-strategies {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+.mp-strat {
+  display: grid;
+  grid-template-columns: auto 90px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.mp-strat.on {
+  border-color: var(--accent);
+}
+.mp-strat.danger.on {
+  border-color: var(--danger);
+}
+.mp-strat input {
+  accent-color: var(--accent);
+}
+.mp-strat-name {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+.mp-strat.danger .mp-strat-name {
+  color: var(--danger);
+}
+.mp-strat-desc {
+  color: var(--text-dim);
+}
+.rs-intro {
+  margin: 0 0 8px;
+}
+.rs-warn {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+/* comparar revisiones */
+.cmp-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.cmp-form input {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+  min-width: 220px;
+}
+.cmp-dots {
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+.cmp-cmd {
+  padding: 6px 16px 0;
+  font-family: var(--mono);
+}
+.cmp-diff {
+  border: none;
+  border-radius: 0;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* hoja de atajos */
+.ks-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.ks-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.ks-key {
+  width: 130px;
+}
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+/* boton descartar (basurita) en filas de archivo */
+.file-act.del:hover:not(:disabled) {
+  color: var(--danger);
 }

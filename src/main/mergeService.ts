@@ -1,15 +1,20 @@
 import { promises as fs } from 'fs'
 import { isAbsolute, join } from 'path'
 import { runGit } from './gitRunner'
-import type { GitResult, PendingOp, RepoState } from '@shared/types'
-
-/** Fusiona una rama en la actual. Conflictos => exit != 0 y queda MERGE_HEAD. */
-export const merge = (repo: string, branch: string): Promise<GitResult> =>
-  runGit(['merge', branch], repo)
+import type { GitResult, PendingOp, RepoState, ResetMode } from '@shared/types'
 
 /** Rebasa la rama actual sobre otra. */
 export const rebase = (repo: string, onto: string): Promise<GitResult> =>
   runGit(['rebase', onto], repo)
+
+/**
+ * Mueve HEAD (y segun el modo, el indice y el working tree) a una revision.
+ * - soft:  solo HEAD; lo demas queda como "preparado"
+ * - mixed: HEAD + indice; los cambios quedan sin preparar
+ * - hard:  TODO; destruye el working tree (la UI confirma con enfasis)
+ */
+export const reset = (repo: string, mode: ResetMode, rev: string): Promise<GitResult> =>
+  runGit(['reset', `--${mode}`, rev], repo)
 
 /**
  * Aplica un commit de otra rama sobre la actual. Conflictos => queda CHERRY_PICK_HEAD.

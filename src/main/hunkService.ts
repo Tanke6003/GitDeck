@@ -1,5 +1,6 @@
 import { runGit, runGitStdin } from './gitRunner'
-import type { FileDiff, GitResult, Hunk } from '@shared/types'
+import { readErr, readOk } from '@shared/types'
+import type { FileDiff, GitResult, Hunk, ReadResult } from '@shared/types'
 
 /** cabecera de hunk: "@@ -a,b +c,d @@ contexto" */
 const HUNK_RE = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/
@@ -17,13 +18,15 @@ export async function getFileHunks(
   repo: string,
   path: string,
   cached = false
-): Promise<FileDiff | null> {
+): Promise<ReadResult<FileDiff | null>> {
   const args = ['diff', '--no-color']
   if (cached) args.push('--cached')
   args.push('--', path)
 
   const res = await runGit(args, repo)
-  if (!res.ok || !res.stdout.trim()) return null
+  // distinguir "git fallo" (error) de "no hay diff para este archivo" (null)
+  if (!res.ok) return readErr(null, res)
+  if (!res.stdout.trim()) return readOk(null)
 
   const lines = res.stdout.split('\n')
   const header: string[] = []
@@ -59,12 +62,12 @@ export async function getFileHunks(
   }
   flush()
 
-  return {
+  return readOk({
     path,
     header: header.join('\n'),
     hunks,
     binary: header.some((l) => l.startsWith('Binary files') || l.includes('GIT binary patch'))
-  }
+  })
 }
 
 /**

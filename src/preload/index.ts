@@ -1,236 +1,175 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type {
-  AliasInfo,
-  BlameLine,
-  BranchInfo,
-  Commit,
-  CommitDetail,
-  FileDiff,
-  FileStatus,
-  GitResult,
-  MergePreview,
-  PendingOp,
-  ReflogEntry,
-  RemoteInfo,
-  RepoInfo,
-  RepoState,
-  SearchMode,
-  StashEntry,
-  TagInfo
-} from '@shared/types'
+import type { IpcChannel, IpcContract } from '@shared/ipc'
 
 /**
- * API segura expuesta al renderer. El renderer NUNCA toca child_process ni ipcRenderer
- * directamente: solo este objeto acotado (contextIsolation activo).
+ * `invoke` tipado contra el contrato de `@shared/ipc`: la firma de cada metodo
+ * del api se deriva del canal, asi que main, preload y renderer no pueden
+ * desalinearse sin que falle la compilacion.
+ */
+function invoke<K extends IpcChannel>(channel: K) {
+  return (...args: Parameters<IpcContract[K]>): ReturnType<IpcContract[K]> =>
+    ipcRenderer.invoke(channel, ...args) as ReturnType<IpcContract[K]>
+}
+
+/**
+ * API segura expuesta al renderer. El renderer NUNCA toca child_process ni
+ * ipcRenderer directamente: solo este objeto acotado (contextIsolation +
+ * sandbox activos). No hay ejecutor generico de git: cada operacion es
+ * explicita y acotada.
  */
 const api = {
   // --- git ---
   /** git --version (prueba de vida del pipeline) */
-  gitVersion: (): Promise<GitResult> => ipcRenderer.invoke('git:version'),
-  /** ejecutor generico de git en un repo dado */
-  git: (args: string[], cwd?: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:run', args, cwd),
+  gitVersion: invoke('git:version'),
 
   // --- repos ---
   /** lista los repos guardados con su info fresca (rama, head, estado) */
-  listRepos: (): Promise<RepoInfo[]> => ipcRenderer.invoke('repos:list'),
+  listRepos: invoke('repos:list'),
   /** agrega un repo por ruta (si es valido) y devuelve su info */
-  addRepo: (dir: string): Promise<RepoInfo> => ipcRenderer.invoke('repos:add', dir),
+  addRepo: invoke('repos:add'),
   /** escanea una carpeta y agrega todos los repos encontrados */
-  scanFolder: (dir: string): Promise<RepoInfo[]> => ipcRenderer.invoke('repos:scan', dir),
+  scanFolder: invoke('repos:scan'),
   /** quita un repo de la lista (no toca el disco) */
-  removeRepo: (dir: string): Promise<boolean> => ipcRenderer.invoke('repos:remove', dir),
+  removeRepo: invoke('repos:remove'),
 
   // --- grafo / ramas / remotos ---
   /** commits de todas las ramas (para el arbol) */
-  commits: (repo: string, limit?: number): Promise<Commit[]> =>
-    ipcRenderer.invoke('git:commits', repo, limit),
+  commits: invoke('git:commits'),
   /** detalle de un commit (meta + archivos + diff) */
-  commitDetail: (repo: string, hash: string): Promise<CommitDetail> =>
-    ipcRenderer.invoke('git:commitDetail', repo, hash),
-  /** busca commits por mensaje, autor, contenido, archivo o revision */
-  searchCommits: (
-    repo: string,
-    mode: SearchMode,
-    text: string,
-    limit?: number
-  ): Promise<Commit[]> => ipcRenderer.invoke('git:search', repo, mode, text, limit),
+  commitDetail: invoke('git:commitDetail'),
+  /** busca commits por mensaje, autor, contenido (-S/-G), archivo o revision */
+  searchCommits: invoke('git:search'),
   /** ramas locales y remotas */
-  branches: (repo: string): Promise<BranchInfo[]> => ipcRenderer.invoke('git:branches', repo),
+  branches: invoke('git:branches'),
   /** remotos con sus URLs */
-  remotes: (repo: string): Promise<RemoteInfo[]> => ipcRenderer.invoke('git:remotes', repo),
+  remotes: invoke('git:remotes'),
+  /** diff entre dos revisiones cualquiera (rama/tag/sha), con color */
+  diffRange: invoke('git:diffRange'),
 
   // --- acciones ---
   /** git fetch --all --prune */
-  fetchAll: (repo: string): Promise<GitResult> => ipcRenderer.invoke('git:fetchAll', repo),
-  /** git pull en la rama actual */
-  pull: (repo: string): Promise<GitResult> => ipcRenderer.invoke('git:pull', repo),
-  /** git push (con -u si setUpstream) */
-  push: (
-    repo: string,
-    opts?: { setUpstream?: boolean; remote?: string; branch?: string }
-  ): Promise<GitResult> => ipcRenderer.invoke('git:push', repo, opts),
+  fetchAll: invoke('git:fetchAll'),
+  /** git pull (con --rebase/--ff-only y remoto/rama opcionales) */
+  pull: invoke('git:pull'),
+  /** git push (con -u si setUpstream; --force-with-lease tras amend/rebase) */
+  push: invoke('git:push'),
   /** agrega un remoto */
-  addRemote: (repo: string, name: string, url: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:addRemote', repo, name, url),
+  addRemote: invoke('git:addRemote'),
   /** quita un remoto */
-  removeRemote: (repo: string, name: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:removeRemote', repo, name),
+  removeRemote: invoke('git:removeRemote'),
   /** renombra un remoto */
-  renameRemote: (repo: string, oldName: string, newName: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:renameRemote', repo, oldName, newName),
+  renameRemote: invoke('git:renameRemote'),
   /** crea rama (y opcionalmente cambia a ella); startPoint = commit/rama de origen */
-  createBranch: (
-    repo: string,
-    name: string,
-    startPoint?: string,
-    checkout?: boolean
-  ): Promise<GitResult> =>
-    ipcRenderer.invoke('git:createBranch', repo, name, startPoint, checkout),
+  createBranch: invoke('git:createBranch'),
   /** cambia a una rama local existente */
-  checkout: (repo: string, name: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:checkout', repo, name),
+  checkout: invoke('git:checkout'),
   /** crea/cambia a la local que sigue a una remota (switch --track) */
-  checkoutRemote: (repo: string, remoteBranch: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:checkoutRemote', repo, remoteBranch),
+  checkoutRemote: invoke('git:checkoutRemote'),
   /** borra una rama local (force = -D) */
-  deleteBranch: (repo: string, name: string, force?: boolean): Promise<GitResult> =>
-    ipcRenderer.invoke('git:deleteBranch', repo, name, force),
+  deleteBranch: invoke('git:deleteBranch'),
   /** borra una rama en el remoto (push --delete) */
-  deleteRemoteBranch: (repo: string, remote: string, branch: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:deleteRemoteBranch', repo, remote, branch),
+  deleteRemoteBranch: invoke('git:deleteRemoteBranch'),
   /** renombra una rama local */
-  renameBranch: (repo: string, oldName: string, newName: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:renameBranch', repo, oldName, newName),
+  renameBranch: invoke('git:renameBranch'),
   /** que traeria fusionar `branch` en HEAD (solo lecturas) */
-  mergePreview: (repo: string, branch: string): Promise<MergePreview> =>
-    ipcRenderer.invoke('git:mergePreview', repo, branch),
+  mergePreview: invoke('git:mergePreview'),
 
   // --- stash ---
   /** pila de stashes (0 = mas reciente) */
-  stashes: (repo: string): Promise<StashEntry[]> => ipcRenderer.invoke('stash:list', repo),
+  stashes: invoke('stash:list'),
   /** guarda los cambios actuales en un stash */
-  stashPush: (
-    repo: string,
-    message?: string,
-    includeUntracked?: boolean,
-    keepIndex?: boolean
-  ): Promise<GitResult> =>
-    ipcRenderer.invoke('stash:push', repo, message, includeUntracked, keepIndex),
+  stashPush: invoke('stash:push'),
   /** aplica un stash y lo deja en la pila */
-  stashApply: (repo: string, ref: string): Promise<GitResult> =>
-    ipcRenderer.invoke('stash:apply', repo, ref),
+  stashApply: invoke('stash:apply'),
   /** aplica un stash y lo saca de la pila */
-  stashPop: (repo: string, ref: string): Promise<GitResult> =>
-    ipcRenderer.invoke('stash:pop', repo, ref),
+  stashPop: invoke('stash:pop'),
   /** descarta un stash sin aplicarlo */
-  stashDrop: (repo: string, ref: string): Promise<GitResult> =>
-    ipcRenderer.invoke('stash:drop', repo, ref),
+  stashDrop: invoke('stash:drop'),
   /** crea una rama a partir de un stash */
-  stashBranch: (repo: string, name: string, ref: string): Promise<GitResult> =>
-    ipcRenderer.invoke('stash:branch', repo, name, ref),
+  stashBranch: invoke('stash:branch'),
   /** diff de lo que guarda un stash (con color) */
-  stashShow: (repo: string, ref: string): Promise<GitResult> =>
-    ipcRenderer.invoke('stash:show', repo, ref),
+  stashShow: invoke('stash:show'),
 
   // --- tags ---
   /** tags del repo, los mas nuevos primero */
-  tags: (repo: string): Promise<TagInfo[]> => ipcRenderer.invoke('tag:list', repo),
+  tags: invoke('tag:list'),
   /** crea un tag; con message es anotado, sin el es ligero */
-  createTag: (repo: string, name: string, message?: string, target?: string): Promise<GitResult> =>
-    ipcRenderer.invoke('tag:create', repo, name, message, target),
+  createTag: invoke('tag:create'),
   /** borra un tag local */
-  deleteTag: (repo: string, name: string): Promise<GitResult> =>
-    ipcRenderer.invoke('tag:delete', repo, name),
+  deleteTag: invoke('tag:delete'),
   /** borra un tag en el remoto */
-  deleteRemoteTag: (repo: string, remote: string, name: string): Promise<GitResult> =>
-    ipcRenderer.invoke('tag:deleteRemote', repo, remote, name),
+  deleteRemoteTag: invoke('tag:deleteRemote'),
   /** publica un tag en el remoto */
-  pushTag: (repo: string, remote: string, name: string): Promise<GitResult> =>
-    ipcRenderer.invoke('tag:push', repo, remote, name),
+  pushTag: invoke('tag:push'),
   /** publica todos los tags que falten en el remoto */
-  pushAllTags: (repo: string, remote: string): Promise<GitResult> =>
-    ipcRenderer.invoke('tag:pushAll', repo, remote),
+  pushAllTags: invoke('tag:pushAll'),
 
   // --- staging por hunk ---
   /** diff de un archivo troceado en hunks (cached = lo ya preparado) */
-  fileHunks: (repo: string, path: string, cached?: boolean): Promise<FileDiff | null> =>
-    ipcRenderer.invoke('hunk:list', repo, path, cached),
+  fileHunks: invoke('hunk:list'),
   /** prepara (o con reverse quita) un solo hunk, sin tocar el archivo en disco */
-  applyHunk: (
-    repo: string,
-    file: FileDiff,
-    index: number,
-    reverse?: boolean
-  ): Promise<GitResult> => ipcRenderer.invoke('hunk:apply', repo, file, index, reverse),
+  applyHunk: invoke('hunk:apply'),
 
   // --- blame / reflog ---
   /** quien escribio cada linea de un archivo (opcionalmente en una revision) */
-  blame: (repo: string, path: string, rev?: string): Promise<BlameLine[]> =>
-    ipcRenderer.invoke('git:blame', repo, path, rev),
+  blame: invoke('git:blame'),
   /** por donde paso HEAD (para recuperar commits sin rama) */
-  reflog: (repo: string, limit?: number): Promise<ReflogEntry[]> =>
-    ipcRenderer.invoke('git:reflog', repo, limit),
+  reflog: invoke('git:reflog'),
 
   // --- alias ---
   /** lista alias (global+local) con su desc.<name> y su marca de favorito */
-  aliases: (repo: string): Promise<AliasInfo[]> => ipcRenderer.invoke('alias:list', repo),
+  aliases: invoke('alias:list'),
   /** marca/desmarca un alias como favorito; devuelve la lista de favoritos */
-  toggleAliasFavorite: (name: string): Promise<string[]> =>
-    ipcRenderer.invoke('alias:toggleFavorite', name),
-  /** ejecuta un alias en el repo (con color ANSI) */
-  runAlias: (repo: string, name: string): Promise<GitResult> =>
-    ipcRenderer.invoke('alias:run', repo, name),
+  toggleAliasFavorite: invoke('alias:toggleFavorite'),
+  /** ejecuta un alias en el repo (con color ANSI); solo uno a la vez */
+  runAlias: invoke('alias:run'),
   /** detiene el alias en curso */
-  stopAlias: (): Promise<boolean> => ipcRenderer.invoke('alias:stop'),
+  stopAlias: invoke('alias:stop'),
   /** crea/edita un alias global (+desc opcional) */
-  setAlias: (name: string, command: string, desc?: string): Promise<GitResult> =>
-    ipcRenderer.invoke('alias:set', name, command, desc),
+  setAlias: invoke('alias:set'),
   /** borra un alias global (+su desc) */
-  deleteAlias: (name: string): Promise<GitResult> => ipcRenderer.invoke('alias:delete', name),
+  deleteAlias: invoke('alias:delete'),
 
   // --- commit / staging ---
   /** estado de archivos (staged / sin preparar / untracked) */
-  status: (repo: string): Promise<FileStatus[]> => ipcRenderer.invoke('commit:status', repo),
-  stage: (repo: string, path: string): Promise<GitResult> =>
-    ipcRenderer.invoke('commit:stage', repo, path),
-  unstage: (repo: string, path: string): Promise<GitResult> =>
-    ipcRenderer.invoke('commit:unstage', repo, path),
-  stageAll: (repo: string): Promise<GitResult> => ipcRenderer.invoke('commit:stageAll', repo),
-  unstageAll: (repo: string): Promise<GitResult> => ipcRenderer.invoke('commit:unstageAll', repo),
+  status: invoke('commit:status'),
+  stage: invoke('commit:stage'),
+  unstage: invoke('commit:unstage'),
+  stageAll: invoke('commit:stageAll'),
+  unstageAll: invoke('commit:unstageAll'),
   /** diff con color; cached=false para ver marcadores de conflicto */
-  stagedDiff: (repo: string, path?: string, cached?: boolean): Promise<GitResult> =>
-    ipcRenderer.invoke('commit:diff', repo, path, cached),
+  stagedDiff: invoke('commit:diff'),
   /** crea el commit con mensaje multilínea (por stdin) */
-  commit: (repo: string, message: string, amend?: boolean): Promise<GitResult> =>
-    ipcRenderer.invoke('commit:commit', repo, message, amend),
+  commit: invoke('commit:commit'),
+  /** descarta los cambios de un archivo (restore; clean -f si es untracked) */
+  discardFile: invoke('commit:discardFile'),
+  /** dry-run de git clean: que se borraria, sin tocar nada */
+  cleanPreview: invoke('commit:cleanPreview'),
+  /** borra untracked (git clean -fd); destructivo, la UI confirma antes */
+  clean: invoke('commit:clean'),
 
-  // --- merge / rebase / cherry-pick / revert ---
+  // --- merge / rebase / cherry-pick / revert / reset ---
   /** operacion a medias (si la hay) + archivos en conflicto */
-  repoState: (repo: string): Promise<RepoState> => ipcRenderer.invoke('git:state', repo),
-  merge: (repo: string, branch: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:merge', repo, branch),
-  rebase: (repo: string, onto: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:rebase', repo, onto),
+  repoState: invoke('git:state'),
+  /** fusiona una rama (con --no-ff/--squash/--ff-only opcionales) */
+  merge: invoke('git:merge'),
+  rebase: invoke('git:rebase'),
   /** aplica un commit de otra rama sobre la actual (cherry-pick -x) */
-  cherryPick: (repo: string, hash: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:cherryPick', repo, hash),
+  cherryPick: invoke('git:cherryPick'),
   /** crea un commit que deshace otro */
-  revert: (repo: string, hash: string): Promise<GitResult> =>
-    ipcRenderer.invoke('git:revert', repo, hash),
+  revert: invoke('git:revert'),
+  /** mueve HEAD a una revision (soft/mixed/hard) */
+  reset: invoke('git:reset'),
   /** termina la operacion en curso tras resolver conflictos */
-  continueOp: (repo: string, op: PendingOp): Promise<GitResult> =>
-    ipcRenderer.invoke('git:continueOp', repo, op),
+  continueOp: invoke('git:continueOp'),
   /** aborta la operacion en curso */
-  abortOp: (repo: string, op: PendingOp): Promise<GitResult> =>
-    ipcRenderer.invoke('git:abortOp', repo, op),
+  abortOp: invoke('git:abortOp'),
 
   // --- dialogos / sistema ---
   /** abre el selector nativo de carpeta; null si se cancela */
-  pickFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickFolder'),
+  pickFolder: invoke('dialog:pickFolder'),
   /** abre un archivo del repo en la app por defecto; '' si abrio bien */
-  openFile: (repo: string, relPath: string): Promise<string> =>
-    ipcRenderer.invoke('shell:openFile', repo, relPath)
+  openFile: invoke('shell:openFile')
 }
 
 export type GitDeckApi = typeof api

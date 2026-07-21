@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { GitResult, StashEntry } from '@shared/types'
-import ConfirmDialog, { type ConfirmSpec } from './ConfirmDialog'
+import ConfirmDialog from './ConfirmDialog'
+import type { ConfirmSpec } from './ConfirmDialog'
 import { ansiToHtml } from '../lib/ansi'
+import { useI18n } from '../lib/i18n'
 
 interface Props {
   repoPath: string
   /** hay cambios en el working tree: sin esto no hay nada que guardar */
   dirty: boolean
+  /** hay otra accion del repo en curso (busy del padre): deshabilita las nuestras */
+  parentBusy: boolean
   /** avisa al padre para refrescar repo/grafo (stash cambia el working tree) */
   onChanged: () => void
   /** publica el comando+salida en el panel de salida cruda del padre */
@@ -19,9 +23,12 @@ interface Props {
  * `apply` deja el stash en la pila y `pop` lo saca: se ofrecen los dos porque la
  * diferencia importa (pop con conflictos NO borra el stash, apply nunca lo borra).
  */
-function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Element {
+function StashPanel({ repoPath, dirty, parentBusy, onChanged, onResult }: Props): JSX.Element {
+  const { t } = useI18n()
   const [stashes, setStashes] = useState<StashEntry[]>([])
-  const [busy, setBusy] = useState(false)
+  const [loadErr, setLoadErr] = useState<GitResult | null>(null)
+  const [selfBusy, setSelfBusy] = useState(false)
+  const busy = selfBusy || parentBusy
   const [showNew, setShowNew] = useState(false)
   const [message, setMessage] = useState('')
   const [untracked, setUntracked] = useState(false)
@@ -31,7 +38,9 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
   const [diff, setDiff] = useState<string>('')
 
   const load = useCallback(async () => {
-    setStashes(await window.api.stashes(repoPath))
+    const r = await window.api.stashes(repoPath)
+    setStashes(r.data)
+    setLoadErr(r.error)
   }, [repoPath])
 
   useEffect(() => {
@@ -42,10 +51,10 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
   /** corre una accion de stash, publica el resultado y recarga todo */
   const run = useCallback(
     async (fn: () => Promise<GitResult>) => {
-      setBusy(true)
+      setSelfBusy(true)
       const res = await fn()
       onResult(res)
-      setBusy(false)
+      setSelfBusy(false)
       setOpenRef(null)
       await load()
       onChanged()
@@ -64,14 +73,9 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
   const onDrop = useCallback(
     (s: StashEntry) => {
       setConfirm({
-        title: 'Descartar stash',
-        message: (
-          <>
-            Se perderán los cambios guardados en <b>{s.ref}</b>
-            {s.message ? ` ("${s.message}")` : ''}. Esto no se puede deshacer.
-          </>
-        ),
-        confirmLabel: 'Descartar',
+        title: t('stash.drop.title'),
+        message: t('stash.drop.msg', { ref: s.ref, msg: s.message ? ` ("${s.message}")` : '' }),
+        confirmLabel: t('stash.drop.confirm'),
         danger: true,
         onConfirm: () => {
           setConfirm(null)
@@ -79,7 +83,7 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
         }
       })
     },
-    [run, repoPath]
+    [run, repoPath, t]
   )
 
   /** abre/cierra el diff de un stash (git stash show -p) */
@@ -100,22 +104,29 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
   return (
     <>
       <div className="pane-title">
-        Stashes <span className="count">{stashes.length}</span>
+        {t('stash.title')} <span className="count">{stashes.length}</span>
         <button
           className="link"
           onClick={() => setShowNew((s) => !s)}
           disabled={busy || !dirty}
-          title={dirty ? 'guardar los cambios actuales en un stash' : 'no hay cambios que guardar'}
+          title={dirty ? t('stash.new.title') : t('stash.new.noChanges')}
         >
-          ＋ guardar
+          ＋ {t('stash.new')}
         </button>
       </div>
+
+      {loadErr && (
+        <div className="pane-error" role="alert">
+          {t('common.readError')}
+          <pre>{(loadErr.stderr || loadErr.stdout).trim() || loadErr.cmd}</pre>
+        </div>
+      )}
 
       {showNew && (
         <div className="add-remote">
           <input
             autoFocus
-            placeholder="mensaje (opcional)"
+            placeholder={t('stash.msgPlaceholder')}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => {
@@ -124,48 +135,40 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
             }}
           />
           <label className="mini check">
-            <input
-              type="checkbox"
-              checked={untracked}
-              onChange={(e) => setUntracked(e.target.checked)}
-            />
-            incluir archivos sin trackear (-u)
+            <input type="checkbox" checked={untracked} onChange={(e) => setUntracked(e.target.checked)} />
+            {t('stash.includeUntracked')}
           </label>
           <div className="ar-btns">
             <button onClick={onPush} disabled={busy}>
-              Guardar
+              {t('stash.save')}
             </button>
             <button className="link" onClick={() => setShowNew(false)}>
-              cancelar
+              {t('common.cancel')}
             </button>
           </div>
         </div>
       )}
 
       <ul className="stash-list">
-        {stashes.length === 0 && <li className="mini">sin stashes</li>}
+        {stashes.length === 0 && !loadErr && <li className="mini">{t('stash.empty')}</li>}
         {stashes.map((s) => (
           <li key={s.ref} className="stash-row">
             <div className="st-head">
-              <span
-                className="st-msg"
-                onClick={() => toggleDiff(s)}
-                title="ver qué guarda este stash"
-              >
-                {s.message || '(sin mensaje)'}
-              </span>
+              <button className="st-msg" onClick={() => toggleDiff(s)} title={t('stash.showDiff')}>
+                {s.message || t('stash.noMessage')}
+              </button>
               <span className="st-actions">
                 <button
                   onClick={() => run(() => window.api.stashApply(repoPath, s.ref))}
                   disabled={busy}
-                  title="aplicar y dejarlo en la pila"
+                  title={t('stash.apply.title')}
                 >
                   apply
                 </button>
                 <button
                   onClick={() => run(() => window.api.stashPop(repoPath, s.ref))}
                   disabled={busy}
-                  title="aplicar y sacarlo de la pila"
+                  title={t('stash.pop.title')}
                 >
                   pop
                 </button>
@@ -173,7 +176,8 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
                   className="del"
                   onClick={() => onDrop(s)}
                   disabled={busy}
-                  title="descartar sin aplicar"
+                  aria-label={t('stash.drop.title')}
+                  title={t('stash.drop.btnTitle')}
                 >
                   ✕
                 </button>
@@ -185,7 +189,7 @@ function StashPanel({ repoPath, dirty, onChanged, onResult }: Props): JSX.Elemen
             {openRef === s.ref && (
               <pre
                 className="st-diff ansi"
-                dangerouslySetInnerHTML={{ __html: ansiToHtml(diff || '(cargando…)') }}
+                dangerouslySetInnerHTML={{ __html: ansiToHtml(diff || t('common.loading')) }}
               />
             )}
           </li>

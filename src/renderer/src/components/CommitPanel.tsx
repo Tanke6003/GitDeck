@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FileStatus, GitResult, PendingOp, RepoState } from '@shared/types'
 import { ansiToHtml } from '../lib/ansi'
+import { useI18n } from '../lib/i18n'
 import HunkView from './HunkView'
+import CleanDialog from './CleanDialog'
+import ConfirmDialog from './ConfirmDialog'
+import type { ConfirmSpec } from './ConfirmDialog'
 
 /** Como se llama cada operacion a medias en el banner. */
 const OP_LABEL: Record<PendingOp, string> = {
@@ -12,20 +16,7 @@ const OP_LABEL: Record<PendingOp, string> = {
 }
 
 /** Tipos Conventional Commits. */
-const TYPES = [
-  '',
-  'feat',
-  'fix',
-  'docs',
-  'style',
-  'refactor',
-  'perf',
-  'test',
-  'build',
-  'ci',
-  'chore',
-  'revert'
-]
+const TYPES = ['', 'feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert']
 
 const SUBJECT_SOFT = 50 // recomendado
 const SUBJECT_HARD = 72 // límite
@@ -36,12 +27,15 @@ interface Props {
 }
 
 /**
- * Panel de commit (Fase 6): staging por archivo, diff de lo preparado y un
- * editor de mensaje MULTILÍNEA con formato Conventional Commits. El mensaje se
- * envía por stdin (no `-m`), así conserva encabezado + cuerpo con saltos de línea.
+ * Panel de commit: staging por archivo y por hunk, descartar cambios, limpiar
+ * untracked, diff de lo preparado y un editor de mensaje MULTILÍNEA con formato
+ * Conventional Commits. El mensaje se envía por stdin (no `-m`), así conserva
+ * encabezado + cuerpo con saltos de línea.
  */
 function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
+  const { t } = useI18n()
   const [files, setFiles] = useState<FileStatus[]>([])
+  const [statusErr, setStatusErr] = useState<GitResult | null>(null)
   const [diffHtml, setDiffHtml] = useState<string>('')
   const [diffFile, setDiffFile] = useState<string | null>(null)
   /** el diff abierto es del index (true) o del working tree (false) */
@@ -61,6 +55,8 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   const [result, setResult] = useState<GitResult | null>(null)
   const [state, setState] = useState<RepoState | null>(null)
   const [openErr, setOpenErr] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null)
+  const [showClean, setShowClean] = useState(false)
 
   const staged = files.filter((f) => f.staged)
   const conflicts = files.filter((f) => f.conflicted)
@@ -77,11 +73,9 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   )
 
   const refresh = useCallback(async () => {
-    const [list, st] = await Promise.all([
-      window.api.status(repoPath),
-      window.api.repoState(repoPath)
-    ])
-    setFiles(list)
+    const [list, st] = await Promise.all([window.api.status(repoPath), window.api.repoState(repoPath)])
+    setFiles(list.data)
+    setStatusErr(list.error)
     setState(st)
     await loadDiff()
   }, [repoPath, loadDiff])
@@ -113,6 +107,28 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
     await refresh()
   }, [repoPath, refresh])
 
+  /** descartar los cambios de un archivo: destructivo, se confirma antes */
+  const onDiscard = useCallback(
+    (f: FileStatus) => {
+      setConfirm({
+        title: t('discard.title', { path: f.path }),
+        message: f.untracked ? t('discard.msgUntracked', { path: f.path }) : t('discard.msg', { path: f.path }),
+        confirmLabel: t('discard.confirm'),
+        danger: true,
+        onConfirm: async () => {
+          setConfirm(null)
+          setBusy(true)
+          const res = await window.api.discardFile(repoPath, f.path, f.untracked)
+          setResult(res)
+          setBusy(false)
+          await refresh()
+          onCommitted()
+        }
+      })
+    },
+    [repoPath, refresh, onCommitted, t]
+  )
+
   // --- merge / rebase en curso ---
   const onResolve = useCallback(
     async (f: FileStatus) => {
@@ -126,9 +142,9 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   const onOpenExternal = useCallback(
     async (f: FileStatus) => {
       const err = await window.api.openFile(repoPath, f.path)
-      if (err) setOpenErr(`No se pudo abrir ${f.path}: ${err}`)
+      if (err) setOpenErr(t('commit.openError', { path: f.path, err }))
     },
-    [repoPath]
+    [repoPath, t]
   )
   const onContinue = useCallback(async () => {
     if (!state?.op) return
@@ -161,7 +177,8 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
     return b.trim() ? `${header}\n\n${b}` : header
   }, [header, body])
 
-  const canCommit = (subject.trim().length > 0 && staged.length > 0) || (amend && staged.length >= 0)
+  // con amend se puede recommitear aunque no haya nada nuevo preparado (solo reescribir el mensaje)
+  const canCommit = (subject.trim().length > 0 && staged.length > 0) || amend
 
   const onCommit = useCallback(async () => {
     setBusy(true)
@@ -182,36 +199,44 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   const headerLen = header.length
   const lenClass = headerLen > SUBJECT_HARD ? 'over' : headerLen > SUBJECT_SOFT ? 'warn' : 'ok'
 
-  const fileRow = (f: FileStatus, staged: boolean): JSX.Element => (
-    <li
-      key={f.path}
-      className={`file-row ${diffFile === f.path ? 'active' : ''}`}
-      onClick={() => {
-        // un archivo nuevo sin trackear no tiene diff: git no sabe de el todavia
-        setDiffUntracked(f.untracked)
-        if (f.untracked) {
-          setDiffFile(f.path)
-          setDiffHtml('')
-          setByHunk(false)
-        } else {
-          loadDiff(f.path, staged)
-        }
-      }}
-      title={f.untracked ? `${f.path} (nuevo)` : 'ver diff'}
-    >
-      <span className={`fstat ${f.untracked ? 'new' : ''}`}>
-        {f.untracked ? '?' : staged ? f.index : f.work}
-      </span>
-      <span className="fpath">{f.path}</span>
+  const fileRow = (f: FileStatus, isStaged: boolean): JSX.Element => (
+    <li key={f.path} className={`file-row ${diffFile === f.path ? 'active' : ''}`}>
+      <button
+        className="file-main"
+        onClick={() => {
+          // un archivo nuevo sin trackear no tiene diff: git no sabe de el todavia
+          setDiffUntracked(f.untracked)
+          if (f.untracked) {
+            setDiffFile(f.path)
+            setDiffHtml('')
+            setByHunk(false)
+          } else {
+            loadDiff(f.path, isStaged)
+          }
+        }}
+        title={f.untracked ? `${f.path} (${t('commit.newFile')})` : t('commit.viewDiff')}
+      >
+        <span className={`fstat ${f.untracked ? 'new' : ''}`}>{f.untracked ? '?' : isStaged ? f.index : f.work}</span>
+        <span className="fpath">{f.path}</span>
+      </button>
+      {!isStaged && (
+        <button
+          className="file-act del"
+          onClick={() => onDiscard(f)}
+          disabled={busy}
+          aria-label={t('discard.btn', { path: f.path })}
+          title={t('discard.btnTitle')}
+        >
+          🗑
+        </button>
+      )}
       <button
         className="file-act"
-        onClick={(e) => {
-          e.stopPropagation()
-          staged ? onUnstage(f) : onStage(f)
-        }}
-        title={staged ? 'quitar de staging' : 'preparar (stage)'}
+        onClick={() => (isStaged ? onUnstage(f) : onStage(f))}
+        aria-label={isStaged ? t('commit.unstage', { path: f.path }) : t('commit.stage', { path: f.path })}
+        title={isStaged ? t('commit.unstageTitle') : t('commit.stageTitle')}
       >
-        {staged ? '−' : '＋'}
+        {isStaged ? '−' : '＋'}
       </button>
     </li>
   )
@@ -219,20 +244,27 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
   return (
     <div className="commit-panel">
       {state?.op && (
-        <div className="merge-banner">
-          <span className="mb-label">⚠ {OP_LABEL[state.op]} en curso</span>
+        <div className="merge-banner" role="alert">
+          <span className="mb-label">⚠ {t('commit.opInProgress', { op: OP_LABEL[state.op] })}</span>
           <span className="mb-info">
             {state.conflicted.length > 0
-              ? `${state.conflicted.length} conflicto(s): resuélvelos, marca ✓, y Continuar`
-              : 'sin conflictos pendientes — puedes Continuar'}
+              ? t('commit.conflictsPending', { n: state.conflicted.length })
+              : t('commit.noConflictsPending')}
           </span>
           <span className="spacer" />
           <button onClick={onContinue} disabled={busy || state.conflicted.length > 0}>
-            Continuar
+            {t('commit.continue')}
           </button>
           <button className="danger" onClick={onAbort} disabled={busy}>
-            Abortar
+            {t('commit.abort')}
           </button>
+        </div>
+      )}
+
+      {statusErr && (
+        <div className="pane-error big" role="alert">
+          <b>{t('commit.statusError')}</b> — <code>{statusErr.cmd}</code>
+          <pre>{(statusErr.stderr || statusErr.stdout).trim()}</pre>
         </div>
       )}
 
@@ -241,43 +273,36 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
           {conflicts.length > 0 && (
             <>
               <div className="pane-title conflict">
-                Conflictos <span className="count">{conflicts.length}</span>
+                {t('commit.conflicts')} <span className="count">{conflicts.length}</span>
               </div>
               {openErr && (
-                <div className="open-err">
+                <div className="open-err" role="alert">
                   {openErr}
-                  <button className="link" onClick={() => setOpenErr(null)}>
+                  <button className="link" onClick={() => setOpenErr(null)} aria-label={t('common.close')}>
                     ✕
                   </button>
                 </div>
               )}
               <ul className="file-list">
                 {conflicts.map((f) => (
-                  <li
-                    key={f.path}
-                    className={`file-row conflict ${diffFile === f.path ? 'active' : ''}`}
-                    onClick={() => loadDiff(f.path, false)}
-                    title="ver diff del conflicto"
-                  >
-                    <span className="fstat conf">!</span>
-                    <span className="fpath">{f.path}</span>
+                  <li key={f.path} className={`file-row conflict ${diffFile === f.path ? 'active' : ''}`}>
+                    <button className="file-main" onClick={() => loadDiff(f.path, false)} title={t('commit.viewConflictDiff')}>
+                      <span className="fstat conf">!</span>
+                      <span className="fpath">{f.path}</span>
+                    </button>
                     <button
                       className="file-act"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onOpenExternal(f)
-                      }}
-                      title="abrir en el editor del sistema para resolver"
+                      onClick={() => onOpenExternal(f)}
+                      aria-label={t('commit.openExternal', { path: f.path })}
+                      title={t('commit.openExternalTitle')}
                     >
                       ↗
                     </button>
                     <button
                       className="file-act ok"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onResolve(f)
-                      }}
-                      title="marcar resuelto (stage)"
+                      onClick={() => onResolve(f)}
+                      aria-label={t('commit.markResolved', { path: f.path })}
+                      title={t('commit.markResolvedTitle')}
                     >
                       ✓
                     </button>
@@ -287,51 +312,46 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
             </>
           )}
           <div className="pane-title">
-            Preparado (staged) <span className="count">{staged.length}</span>
+            {t('commit.staged')} <span className="count">{staged.length}</span>
             {staged.length > 0 && (
               <button className="link" onClick={onUnstageAll}>
-                quitar todo
+                {t('commit.unstageAll')}
               </button>
             )}
           </div>
           <ul className="file-list">
-            {staged.length === 0 && <li className="mini pad">nada preparado</li>}
+            {staged.length === 0 && <li className="mini pad">{t('commit.nothingStaged')}</li>}
             {staged.map((f) => fileRow(f, true))}
           </ul>
 
           <div className="pane-title">
-            Cambios <span className="count">{changes.length}</span>
+            {t('commit.changes')} <span className="count">{changes.length}</span>
             {changes.length > 0 && (
               <button className="link" onClick={onStageAll}>
-                preparar todo
+                {t('commit.stageAll')}
               </button>
             )}
+            <button className="link" onClick={() => setShowClean(true)} disabled={busy} title={t('clean.btnTitle')}>
+              {t('clean.btn')}
+            </button>
           </div>
           <ul className="file-list">
-            {changes.length === 0 && <li className="mini pad">sin cambios</li>}
+            {changes.length === 0 && <li className="mini pad">{t('commit.noChanges')}</li>}
             {changes.map((f) => fileRow(f, false))}
           </ul>
         </div>
 
         <div className="diff-view">
           <div className="pane-title">
-            Diff {diffCached ? 'preparado' : 'sin preparar'}
-            {diffFile ? (
-              <span className="mini">— {diffFile}</span>
-            ) : (
-              <span className="mini">— todo</span>
-            )}
+            {diffCached ? t('commit.diffStaged') : t('commit.diffUnstaged')}
+            {diffFile ? <span className="mini">— {diffFile}</span> : <span className="mini">— {t('commit.diffAll')}</span>}
             {diffFile && !diffUntracked && (
               <button
                 className={`link ${byHunk ? 'on' : ''}`}
                 onClick={() => setByHunk((s) => !s)}
-                title={
-                  byHunk
-                    ? 'ver el diff completo'
-                    : `preparar o quitar trozos sueltos de ${diffFile}`
-                }
+                title={byHunk ? t('commit.fullDiffTitle') : t('commit.byHunkTitle', { path: diffFile })}
               >
-                {byHunk ? 'diff completo' : '⧉ por hunk'}
+                {byHunk ? t('commit.fullDiff') : `⧉ ${t('commit.byHunk')}`}
               </button>
             )}
             {diffFile && (
@@ -343,73 +363,60 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
                   loadDiff()
                 }}
               >
-                ver todo
+                {t('commit.viewAll')}
               </button>
             )}
           </div>
 
           {diffUntracked ? (
-            <div className="diff-empty">
-              Archivo nuevo sin trackear: git aún no lo conoce, así que no hay diff que dividir.
-              Prepáralo entero con ＋.
-            </div>
+            <div className="diff-empty">{t('commit.untrackedNote')}</div>
           ) : byHunk && diffFile ? (
-            <HunkView
-              repoPath={repoPath}
-              path={diffFile}
-              cached={diffCached}
-              onApplied={refresh}
-              onResult={setResult}
-            />
+            <HunkView repoPath={repoPath} path={diffFile} cached={diffCached} onApplied={refresh} onResult={setResult} />
           ) : diffHtml ? (
             <pre className="diff-body" dangerouslySetInnerHTML={{ __html: diffHtml }} />
           ) : (
-            <div className="diff-empty">
-              {diffCached
-                ? 'Nada preparado. Prepara archivos (＋) para ver el diff.'
-                : 'Sin cambios sin preparar.'}
-            </div>
+            <div className="diff-empty">{diffCached ? t('commit.emptyStaged') : t('commit.emptyUnstaged')}</div>
           )}
         </div>
       </div>
 
       <div className="commit-editor">
         <div className="ce-header">
-          <select value={type} onChange={(e) => setType(e.target.value)} title="tipo (Conventional Commits)">
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t || '(sin tipo)'}
+          <select value={type} onChange={(e) => setType(e.target.value)} title={t('commit.typeTitle')} aria-label={t('commit.typeTitle')}>
+            {TYPES.map((ty) => (
+              <option key={ty} value={ty}>
+                {ty || t('commit.noType')}
               </option>
             ))}
           </select>
           <input
             className="ce-scope"
-            placeholder="scope (opcional)"
+            placeholder={t('commit.scopePlaceholder')}
             value={scope}
             onChange={(e) => setScope(e.target.value)}
           />
           <input
             className="ce-subject"
-            placeholder="resumen breve del cambio"
+            placeholder={t('commit.subjectPlaceholder')}
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
           />
-          <span className={`ce-count ${lenClass}`} title="longitud del encabezado (rec. ≤50, máx 72)">
+          <span className={`ce-count ${lenClass}`} title={t('commit.lenTitle')}>
             {headerLen}
+            {headerLen > SUBJECT_HARD && <span aria-hidden="true"> ⚠</span>}
           </span>
         </div>
 
         {header && (
           <div className="ce-preview">
-            <span className="mini">encabezado:</span> <code>{header}</code>
+            <span className="mini">{t('commit.headerPreview')}:</span> <code>{header}</code>
           </div>
         )}
 
         <textarea
           className="ce-body"
-          placeholder={
-            'Cuerpo (opcional, multilínea).\n\n- explica el qué y el porqué\n- BREAKING CHANGE: … / Refs #123'
-          }
+          placeholder={t('commit.bodyPlaceholder')}
+          aria-label={t('commit.bodyLabel')}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={6}
@@ -418,19 +425,32 @@ function CommitPanel({ repoPath, onCommitted }: Props): JSX.Element {
         <div className="ce-actions">
           <label className="ce-amend">
             <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} />
-            amend (rehacer último commit)
+            {t('commit.amend')}
           </label>
           <span className="spacer" />
           {result && (
-            <span className={`ce-result ${result.ok ? 'ok' : 'err'}`}>
-              {result.ok ? '✓ commit creado' : `✕ ${(result.stderr || 'error').split('\n')[0]}`}
+            <span className={`ce-result ${result.ok ? 'ok' : 'err'}`} role="status">
+              {result.ok ? `✓ ${t('commit.done')}` : `✕ ${(result.stderr || 'error').split('\n')[0]}`}
             </span>
           )}
           <button className="commit-btn" onClick={onCommit} disabled={busy || !canCommit}>
-            {busy ? 'creando…' : amend ? 'Amend commit' : 'Commit'}
+            {busy ? t('commit.creating') : amend ? t('commit.amendBtn') : 'Commit'}
           </button>
         </div>
       </div>
+
+      {showClean && (
+        <CleanDialog
+          repoPath={repoPath}
+          onDone={async (res) => {
+            setResult(res)
+            await refresh()
+            onCommitted()
+          }}
+          onClose={() => setShowClean(false)}
+        />
+      )}
+      {confirm && <ConfirmDialog {...confirm} onCancel={() => setConfirm(null)} />}
     </div>
   )
 }

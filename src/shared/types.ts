@@ -14,6 +14,64 @@ export interface GitResult {
   code: number | null
 }
 
+/**
+ * Resultado de una LECTURA (log, status, blame…): los datos parseados más el
+ * fallo de git si lo hubo. Antes las lecturas devolvian `[]` ante cualquier
+ * error, y la UI no podia distinguir "sin datos" de "git fallo": un status roto
+ * se veia como working tree limpio. `error` conserva el GitResult fallido para
+ * poder mostrar el comando y su salida.
+ */
+export interface ReadResult<T> {
+  data: T
+  /** null si la lectura fue bien; el GitResult fallido si no */
+  error: GitResult | null
+}
+
+/** Lectura correcta. */
+export const readOk = <T>(data: T): ReadResult<T> => ({ data, error: null })
+
+/** Lectura fallida: datos "vacios" + el GitResult para diagnosticar. */
+export const readErr = <T>(empty: T, error: GitResult): ReadResult<T> => ({ data: empty, error })
+
+/** Opciones de `git push`. */
+export interface PushOpts {
+  /** publica la rama con -u remote branch */
+  setUpstream?: boolean
+  remote?: string
+  branch?: string
+  /**
+   * push forzado SEGURO (--force-with-lease): necesario tras amend/rebase.
+   * A diferencia de --force, no pisa trabajo remoto que no hayas visto.
+   */
+  forceWithLease?: boolean
+}
+
+/** Opciones de `git pull`. */
+export interface PullOpts {
+  /** reaplica los commits locales encima (historia lineal) */
+  rebase?: boolean
+  /** falla si no es fast-forward, en vez de crear un merge de sincronizacion */
+  ffOnly?: boolean
+  remote?: string
+  branch?: string
+}
+
+/** Estrategia de pull elegida en la UI (se recuerda por repo). */
+export type PullMode = 'merge' | 'rebase' | 'ff-only'
+
+/** Opciones de `git merge`. */
+export interface MergeOpts {
+  /** fuerza un commit de merge aunque se pudiera hacer fast-forward */
+  noFF?: boolean
+  /** trae los cambios como un unico commit sin crear el merge */
+  squash?: boolean
+  /** solo fusiona si es fast-forward */
+  ffOnly?: boolean
+}
+
+/** Modo de `git reset`: que se conserva y que se descarta. */
+export type ResetMode = 'soft' | 'mixed' | 'hard'
+
 /** Info de un repo detectado. */
 export interface RepoInfo {
   /** ruta absoluta al repo */
@@ -203,10 +261,11 @@ export interface ReflogEntry {
  * - `message`  texto en el mensaje (--grep)
  * - `author`   nombre/email del autor (--author)
  * - `content`  texto que el commit agrego o quito (pickaxe -S)
+ * - `regex`    regex sobre las lineas agregadas/quitadas (-G; ve cambios que -S no)
  * - `file`     commits que tocaron rutas que contienen el texto
  * - `hash`     una revision concreta (sha, rama, tag, HEAD~2…)
  */
-export type SearchMode = 'message' | 'author' | 'content' | 'file' | 'hash'
+export type SearchMode = 'message' | 'author' | 'content' | 'regex' | 'file' | 'hash'
 
 /** Un tag, ligero o anotado. */
 export interface TagInfo {

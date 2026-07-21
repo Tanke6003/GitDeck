@@ -9,12 +9,19 @@ export async function isRepo(dir: string): Promise<boolean> {
   return res.ok && res.stdout.trim() === 'true'
 }
 
-/** Lee rama, HEAD y estado de un repo. Marca valid:false si dejo de serlo. */
+/**
+ * Lee rama, HEAD y estado de un repo. Marca valid:false si dejo de serlo.
+ *
+ * Una sola llamada a git: `status --porcelain=v2 --branch` trae rama, oid y
+ * archivos cambiados de una pasada. Antes eran 4 procesos por repo, y con N
+ * repos el arranque (y cada focus de la ventana) lanzaba 4·N gits a la vez.
+ */
 export async function getRepoInfo(dir: string): Promise<RepoInfo> {
   const path = normalize(dir)
   const name = basename(path)
 
-  if (!(await isRepo(path))) {
+  const res = await runGit(['status', '--porcelain=v2', '--branch'], path)
+  if (!res.ok) {
     return {
       path,
       name,
@@ -22,25 +29,26 @@ export async function getRepoInfo(dir: string): Promise<RepoInfo> {
       head: null,
       dirty: false,
       valid: false,
-      error: 'No es un repositorio git (movido o borrado)'
+      error: res.stderr.trim() || 'not a git repository'
     }
   }
 
-  const [branchRes, headRes, statusRes] = await Promise.all([
-    runGit(['branch', '--show-current'], path),
-    runGit(['rev-parse', '--short', 'HEAD'], path),
-    runGit(['status', '--porcelain'], path)
-  ])
-
-  const branch = branchRes.stdout.trim()
-  return {
-    path,
-    name,
-    currentBranch: branch.length > 0 ? branch : null, // vacio => detached
-    head: headRes.ok ? headRes.stdout.trim() : null, // falla => repo sin commits
-    dirty: statusRes.stdout.trim().length > 0,
-    valid: true
+  let branch: string | null = null
+  let head: string | null = null
+  let dirty = false
+  for (const line of res.stdout.split('\n')) {
+    if (line.startsWith('# branch.head ')) {
+      const b = line.slice('# branch.head '.length).trim()
+      branch = b === '(detached)' ? null : b
+    } else if (line.startsWith('# branch.oid ')) {
+      const oid = line.slice('# branch.oid '.length).trim()
+      head = oid === '(initial)' ? null : oid.slice(0, 7) // (initial) => repo sin commits
+    } else if (line.trim() && !line.startsWith('#')) {
+      dirty = true // cualquier entrada que no sea cabecera es un cambio
+    }
   }
+
+  return { path, name, currentBranch: branch, head, dirty, valid: true }
 }
 
 /**

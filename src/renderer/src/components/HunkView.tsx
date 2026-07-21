@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FileDiff, GitResult } from '@shared/types'
+import { useI18n } from '../lib/i18n'
 
 interface Props {
   repoPath: string
@@ -26,13 +27,17 @@ function lineClass(line: string): string {
  * o quitarlo del staging por separado (el equivalente visual de `git add -p`).
  */
 function HunkView({ repoPath, path, cached, onApplied, onResult }: Props): JSX.Element {
+  const { t } = useI18n()
   const [diff, setDiff] = useState<FileDiff | null>(null)
+  const [loadErr, setLoadErr] = useState<GitResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
-    setDiff(await window.api.fileHunks(repoPath, path, cached))
+    const r = await window.api.fileHunks(repoPath, path, cached)
+    setDiff(r.data)
+    setLoadErr(r.error)
     setLoading(false)
   }, [repoPath, path, cached])
 
@@ -54,10 +59,17 @@ function HunkView({ repoPath, path, cached, onApplied, onResult }: Props): JSX.E
     [diff, repoPath, cached, onResult, load, onApplied]
   )
 
-  if (loading) return <div className="hk-empty">cargando diff…</div>
-  if (!diff) return <div className="hk-empty">sin cambios que mostrar</div>
-  if (diff.binary) return <div className="hk-empty">archivo binario: no se puede dividir en hunks</div>
-  if (diff.hunks.length === 0) return <div className="hk-empty">sin hunks</div>
+  if (loading) return <div className="hk-empty">{t('hunk.loading')}</div>
+  if (loadErr)
+    return (
+      <div className="hk-empty err" role="alert">
+        {t('common.readError')} — <code>{loadErr.cmd}</code>
+        <pre>{(loadErr.stderr || loadErr.stdout).trim()}</pre>
+      </div>
+    )
+  if (!diff) return <div className="hk-empty">{t('hunk.noChanges')}</div>
+  if (diff.binary) return <div className="hk-empty">{t('hunk.binary')}</div>
+  if (diff.hunks.length === 0) return <div className="hk-empty">{t('hunk.none')}</div>
 
   return (
     <div className="hk-wrap">
@@ -71,9 +83,9 @@ function HunkView({ repoPath, path, cached, onApplied, onResult }: Props): JSX.E
             <button
               onClick={() => apply(h.index)}
               disabled={busy}
-              title={cached ? 'quitar este hunk del staging' : 'preparar solo este hunk'}
+              title={cached ? t('hunk.unstage.title') : t('hunk.stage.title')}
             >
-              {cached ? '− quitar hunk' : '+ preparar hunk'}
+              {cached ? `− ${t('hunk.unstage')}` : `+ ${t('hunk.stage')}`}
             </button>
           </div>
           <pre className="hk-code">

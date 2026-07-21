@@ -2,24 +2,20 @@ import { useMemo } from 'react'
 import type { Commit } from '@shared/types'
 import { computeGraph } from '../lib/graph'
 import { parseRef, relativeTime } from '../lib/format'
+import { useI18n } from '../lib/i18n'
 
 const ROW_H = 28
 const COL_W = 18
 const PAD_X = 14
 const NODE_R = 4.5
 
-// paleta de carriles (se cicla por columna)
-const LANE_COLORS = [
-  '#89b4fa',
-  '#a6e3a1',
-  '#f9e2af',
-  '#f38ba8',
-  '#cba6f7',
-  '#94e2d5',
-  '#fab387',
-  '#74c7ec'
-]
-const laneColor = (col: number): string => LANE_COLORS[col % LANE_COLORS.length]
+// paleta de carriles: variables de tema (--lane-0..7), no hex fijos,
+// para que el grafo siga al tema claro/oscuro igual que el resto de la UI.
+// OJO: hay que aplicarlas via `style` (CSS), no como atributo de presentacion
+// SVG (stroke=/fill=): Chromium no resuelve var() en atributos de presentacion,
+// asi que stroke caeria a `none` (lineas invisibles) y fill a negro.
+const LANES = 8
+const laneColor = (col: number): string => `var(--lane-${col % LANES})`
 
 const x = (col: number): number => PAD_X + col * COL_W
 const yNode = (row: number): number => row * ROW_H + ROW_H / 2
@@ -33,15 +29,19 @@ function curve(x1: number, y1: number, x2: number, y2: number): string {
 
 interface Props {
   commits: Commit[]
+  /** nombres de remotos, para clasificar bien las refs (local vs remota) */
+  remotes: string[]
   selected: string | null
   onSelect: (hash: string) => void
 }
 
 /**
- * Dibuja el arbol de commits: un SVG con los carriles a la izquierda y,
- * alineada fila a fila, la info del commit (refs, subject, autor, fecha).
+ * Dibuja el arbol de commits: un SVG decorativo con los carriles a la izquierda
+ * y, alineada fila a fila, la info del commit (refs, subject, autor, fecha).
+ * Cada fila es un boton real: el grafo se navega tambien con teclado.
  */
-function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
+function CommitGraph({ commits, remotes, selected, onSelect }: Props): JSX.Element {
+  const { t, lang } = useI18n()
   const graph = useMemo(() => computeGraph(commits), [commits])
   const { rows, width } = graph
   const gutter = PAD_X * 2 + Math.max(width, 1) * COL_W
@@ -65,7 +65,7 @@ function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
           <path
             key={`t-${i}-${c}`}
             d={curve(x(c), yTop, x(r.col), yc)}
-            stroke={laneColor(c)}
+            style={{ stroke: laneColor(c) }}
             fill="none"
             strokeWidth={1.6}
           />
@@ -73,15 +73,7 @@ function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
       } else {
         // carril que solo pasa de largo
         paths.push(
-          <line
-            key={`t-${i}-${c}`}
-            x1={x(c)}
-            y1={yTop}
-            x2={x(c)}
-            y2={yc}
-            stroke={laneColor(c)}
-            strokeWidth={1.6}
-          />
+          <line key={`t-${i}-${c}`} x1={x(c)} y1={yTop} x2={x(c)} y2={yc} style={{ stroke: laneColor(c) }} strokeWidth={1.6} />
         )
       }
     })
@@ -91,15 +83,7 @@ function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
       if (!h) return
       if (r.before[c] === h && h !== r.commit.hash) {
         paths.push(
-          <line
-            key={`bp-${i}-${c}`}
-            x1={x(c)}
-            y1={yc}
-            x2={x(c)}
-            y2={yBot}
-            stroke={laneColor(c)}
-            strokeWidth={1.6}
-          />
+          <line key={`bp-${i}-${c}`} x1={x(c)} y1={yc} x2={x(c)} y2={yBot} style={{ stroke: laneColor(c) }} strokeWidth={1.6} />
         )
       }
     })
@@ -111,7 +95,7 @@ function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
         <path
           key={`be-${i}-${k}`}
           d={curve(x(r.col), yc, x(pc), yBot)}
-          stroke={laneColor(pc)}
+          style={{ stroke: laneColor(pc) }}
           fill="none"
           strokeWidth={1.6}
         />
@@ -125,42 +109,36 @@ function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
         cx={x(r.col)}
         cy={yc}
         r={NODE_R}
-        fill={isMerge ? '#181825' : laneColor(r.col)}
-        stroke={laneColor(r.col)}
+        style={{ fill: isMerge ? 'var(--graph-bg)' : laneColor(r.col), stroke: laneColor(r.col) }}
         strokeWidth={isMerge ? 2 : 1}
       />
     )
   })
 
   if (rows.length === 0) {
-    return <div className="graph-empty">Sin commits para mostrar.</div>
+    return <div className="graph-empty">{t('graph.empty')}</div>
   }
 
   return (
     <div className="commit-graph" style={{ height }}>
-      <svg
-        className="graph-svg"
-        width={gutter}
-        height={height}
-        style={{ width: gutter }}
-      >
+      <svg className="graph-svg" width={gutter} height={height} style={{ width: gutter }} aria-hidden="true">
         {paths}
         {nodes}
       </svg>
 
       <div className="commit-rows" style={{ marginLeft: gutter }}>
         {rows.map((r) => (
-          <div
+          <button
             key={r.commit.hash}
             className={`commit-row ${selected === r.commit.hash ? 'active' : ''}`}
             style={{ height: ROW_H }}
             onClick={() => onSelect(r.commit.hash)}
             title={r.commit.subject}
           >
-            {r.commit.refs.map((raw, k) => {
-              const ref = parseRef(raw)
+            {r.commit.refs.map((raw) => {
+              const ref = parseRef(raw, remotes)
               return (
-                <span key={k} className={`ref-chip ${ref.kind}`}>
+                <span key={raw} className={`ref-chip ${ref.kind}`}>
                   {ref.label}
                 </span>
               )
@@ -168,10 +146,10 @@ function CommitGraph({ commits, selected, onSelect }: Props): JSX.Element {
             <span className="commit-subject">{r.commit.subject}</span>
             <span className="commit-meta">
               <span className="commit-author">{r.commit.author}</span>
-              <span className="commit-date">{relativeTime(r.commit.timestamp)}</span>
+              <span className="commit-date">{relativeTime(r.commit.timestamp, lang)}</span>
               <span className="commit-sha">{r.commit.short}</span>
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>

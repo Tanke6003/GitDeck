@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import Dialog from './Dialog'
+import { useI18n } from '../lib/i18n'
 
 export interface ConfirmSpec {
   title: string
@@ -19,30 +21,31 @@ interface Props extends ConfirmSpec {
  * Modal de confirmacion propio (no `window.confirm`, que bloquea el proceso del
  * renderer y no se puede estilar). Se usa antes de acciones que pierden trabajo
  * o que tocan el remoto: checkout con cambios sin guardar, borrar rama, etc.
+ *
+ * En dialogos `danger` el foco inicial va a CANCELAR: si el usuario llego
+ * pulsando Enter, otra pulsacion de inercia no dispara la accion destructiva.
  */
-function ConfirmDialog({
-  title,
-  message,
-  confirmLabel = 'Continuar',
-  danger = false,
-  onConfirm,
-  onCancel
-}: Props): JSX.Element {
+function ConfirmDialog({ title, message, confirmLabel, danger = false, onConfirm, onCancel }: Props): JSX.Element {
+  const { t } = useI18n()
   return (
-    <div className="cf-overlay" onClick={onCancel}>
-      <div className="cf-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="cf-title">{title}</div>
-        <div className="cf-message">{message}</div>
-        <div className="cf-actions">
-          <button className="link" onClick={onCancel}>
-            Cancelar
-          </button>
-          <button className={danger ? 'danger' : ''} onClick={onConfirm} autoFocus>
-            {confirmLabel}
-          </button>
-        </div>
+    <Dialog className="cf-dialog" labelledBy="cf-title" onClose={onCancel}>
+      <div className="cf-title" id="cf-title">
+        {title}
       </div>
-    </div>
+      <div className="cf-message">{message}</div>
+      <div className="cf-actions">
+        <button className="link" onClick={onCancel} data-autofocus={danger || undefined}>
+          {t('common.cancel')}
+        </button>
+        <button
+          className={danger ? 'danger' : ''}
+          onClick={onConfirm}
+          data-autofocus={!danger || undefined}
+        >
+          {confirmLabel ?? t('common.continue')}
+        </button>
+      </div>
+    </Dialog>
   )
 }
 
