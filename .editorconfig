@@ -1,0 +1,22 @@
+# EditorConfig — https://editorconfig.org
+# Coherente con .prettierrc.json (tabWidth 2, printWidth 100) para que el editor
+# y Prettier no se peleen. Prettier sigue siendo la fuente de verdad del formato.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+# En Markdown dos espacios al final son un salto de linea "duro": no recortarlos.
+[*.md]
+trim_trailing_whitespace = false
+
+# Los archivos de configuracion tipo JSON/YAML se quedan con 2 espacios (ya es el
+# indent por defecto), solo se listan por claridad.
+[*.{json,yml,yaml}]
+indent_size = 2

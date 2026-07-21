@@ -1,0 +1,41 @@
+# CI: typecheck + lint + tests en cada push/PR.
+# Los tests corren git de verdad contra repos temporales; los runners de
+# GitHub traen git preinstalado, asi que funcionan tal cual.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    strategy:
+      matrix:
+        # windows es la plataforma objetivo; ubuntu vigila portabilidad
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests (git real contra repos temporales)
+        run: npm test
+        env:
+          GIT_AUTHOR_NAME: ci
+          GIT_AUTHOR_EMAIL: ci@gitdeck.dev
+          GIT_COMMITTER_NAME: ci
+          GIT_COMMITTER_EMAIL: ci@gitdeck.dev

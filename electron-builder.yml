@@ -17,12 +17,17 @@ asar: true
 
 win:
   target:
+    # instalador NSIS + zip portable (misma app, sin instalar)
     - target: nsis
       arch: [x64]
+    - target: zip
+      arch: [x64]
   icon: build/icon.ico
-  artifactName: ${productName}-${version}-setup.${ext}
+  # nombre por defecto de los targets win (lo usa el zip); el nsis lo sobrescribe
+  artifactName: ${productName}-${version}-${arch}.${ext}
 
 nsis:
+  artifactName: ${productName}-${version}-setup.${ext}
   # instalador con asistente (no one-click) para poder elegir carpeta
   oneClick: false
   perMachine: false
